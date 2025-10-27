@@ -1,10 +1,10 @@
 package main
 
 import (
-	"V2V/api"
-	"V2V/queue"
-	"V2V/store"
-	"V2V/worker"
+	"V2V/controller"
+	"V2V/dao/store"
+	"V2V/pkg/queue"
+	"V2V/pkg/snowflake"
 	"log"
 	"os"
 
@@ -16,24 +16,45 @@ func init() {
 	if os.Getenv("GEMINI_API_KEY") == "" {
 		os.Setenv("GEMINI_API_KEY", "AIzaSyCXCqko6fnnjE_s2RE-oNL_rPCKvMTilbg")
 	}
+
+	if os.Getenv("ARK_API_KEY") == "" {
+		os.Setenv("ARK_API_KEY", "1b9ef66f-0934-4e09-bcd7-5ebf52808b57")
+	}
 }
 
 func main() {
-	// This is a placeholder for the main function.
-	rabbitMQ, err := queue.NewRabbitMQ("amqp://admin:123456@localhost:5672/")
+	// 初始化单例 RabbitMQ
+	dsn := "amqp://admin:123456@localhost:5672/"
+	if err := queue.InitRabbitMQ(dsn); err != nil {
+		log.Fatalf("Failed to init RabbitMQ: %v", err)
+	}
+	rabbitMQ, err := queue.GetRabbitMQ()
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+		log.Fatalf("Failed to get RabbitMQ instance: %v", err)
 	}
 	defer rabbitMQ.Close()
+	go func() {
+		if err := rabbitMQ.Consume(); err != nil {
+			log.Fatalf("rabbit consume failed: %v", err)
+		}
+	}()
 
-	redisStore := store.NewRedisStore("localhost:6379")
+	err = store.Init("localhost:6379")
+	if err != nil {
+		log.Fatalf("Failed to init Redis: %v", err)
+	}
 
-	// 启动任务处理器
-	processor := worker.NewVideoProcessor(rabbitMQ, redisStore)
-	go processor.Start()
+	//初始化雪花算法
+	err = snowflake.Init(1)
+	if err != nil {
+		log.Fatalf("Failed to init Snowflake: %v", err)
+	}
+
 	r := gin.Default()
-	handler := api.NewHandler(rabbitMQ, redisStore)
-	r.POST("/V2T", handler.SubmitVideoTask)
-	r.GET("/V2T/:task_id", handler.GetTaskResult)
+
+	r.POST("/V2T", controller.SubmitV2TTask)
+	r.POST("/V2T/LoraText", controller.LoraText)
+	r.POST("/T2I", controller.SubmitT2ITask)
+	r.GET("/V2T/:task_id", controller.GetV2TTaskResult)
 	r.Run()
 }
