@@ -2,6 +2,7 @@ package queue
 
 import (
 	"V2V/dao/store"
+	"V2V/pkg/sse"
 	"V2V/task"
 	"context"
 	"encoding/json"
@@ -71,13 +72,52 @@ func newAMQPQueue(dsn string) (MessageQueue, error) {
 		conn.Close()
 		return nil, err
 	}
+	// 创建死信交换与死信队列
+	//
+	// 概念回顾（注释说明）：
+	// - Dead Letter Queue (DLQ)：用于保存无法被正常处理或需要人工介入的消息。
+	// - Dead Letter Exchange (DLX)：当队列对某条消息执行 Nack(requeue=false) 或消息过期/超出长度等情况时，
+	//   RabbitMQ 会把该消息路由到配置的 DLX，由 DLX 转发到指定的 DLQ。
+	// - 为什么需要交换机（DLX）而不是直接把消息放到队列：
+	//   交换机（Exchange）是 RabbitMQ 的路由中心，DLX 允许把不同来源或不同路由 key 的消息进行灵活路由，
+	//   例如可以把不同主队列的死信都路由到同一个 DLQ 或不同 DLQ；使用 exchange 可以实现更灵活的拓扑。
+	//
+	// 本实现：
+	// - 建立一个 direct 类型的 DLX（v2t_dlq_exchange），并声明 DLQ 队列（v2t_dlq）绑定到该 DLX；
+	// - 在主队列 `v2t_tasks` 的参数中设置 `x-dead-letter-exchange` 与 `x-dead-letter-routing-key`，
+	//   当我们对消息执行 `Nack(false,false)`（不重入队）时，消息会被送到 DLX -> DLQ。
+
+	dlxName := "v2t_dlq_exchange"
+	dlqName := "v2t_dlq"
+	if err := ch.ExchangeDeclare(dlxName, "direct", true, false, false, false, nil); err != nil {
+		ch.Close()
+		conn.Close()
+		return nil, err
+	}
+	if _, err := ch.QueueDeclare(dlqName, true, false, false, false, nil); err != nil {
+		ch.Close()
+		conn.Close()
+		return nil, err
+	}
+	if err := ch.QueueBind(dlqName, dlqName, dlxName, false, nil); err != nil {
+		ch.Close()
+		conn.Close()
+		return nil, err
+	}
+
+	// 为主队列添加 dead-letter 配置（当 Nack requeue=false 时会进入 DLQ）
+	args := amqp.Table{
+		"x-dead-letter-exchange":    dlxName,
+		"x-dead-letter-routing-key": dlqName,
+	}
+
 	q, err := ch.QueueDeclare(
 		"v2t_tasks", // name
 		true,        // durable
 		false,       // delete when unused
 		false,       // exclusive
 		false,       // no-wait
-		nil,         // args
+		args,        // args
 	)
 	if err != nil {
 		ch.Close()
@@ -97,6 +137,17 @@ func (q *amqpQueue) Publish(b []byte) error {
 	)
 }
 
+// publishWithHeaders 发布消息并携带自定义 header（用于重试计数）
+func (q *amqpQueue) publishWithHeaders(b []byte, headers amqp.Table) error {
+	msg := amqp.Publishing{
+		ContentType:  "application/json",
+		Body:         b,
+		DeliveryMode: amqp.Persistent,
+		Headers:      headers,
+	}
+	return q.ch.Publish("", q.queueName, false, false, msg)
+}
+
 // ConsumeAndServe 在 AMQP 消费循环中直接执行 handler，每条消息处理成功后 Ack，失败时 Nack (并可重新入队)
 // handler 返回 nil 表示处理成功；非 nil 表示处理失败，函数会根据 requeue 参数决定是否重新入队。
 func (q *amqpQueue) Consume() error {
@@ -114,6 +165,22 @@ func (q *amqpQueue) Consume() error {
 		sem <- struct{}{}
 		wg.Add(1)
 		// spawn goroutine 处理每条消息，处理结束后 Ack/Nack
+		//
+		// 处理策略说明（注释）：
+		// - 首先把消息反序列化为内部任务结构 `V2TTask`，如果解析失败则认为该消息无效，直接 Nack(requeue=false) -> 进入 DLQ。
+		// - 调用外部视频分析 API：
+		//   - 若返回永久错误（例如参数错误 / HTTP 400 / INVALID_ARGUMENT），则认为重试没有意义，Nack(false,false) -> DLQ。
+		//   - 若返回临时错误（网络、限流等），则用 header `x-attempts` 跟踪重试次数：
+		//     - 如果 attempts < maxRetries：把消息带上 attempts+1 重新发布到主队列（publishWithHeaders），并 Ack 原消息。
+		//       这里采用 re-publish + ack 的方式而不是 Nack(requeue=true)，以便我们可以在 republish 时修改 header（amqp 内部 redelivery header 无法修改）。
+		//     - 如果 attempts >= maxRetries：Nack(false,false) -> DLQ。
+		// - 存储结果到 Redis 时也会进行错误判断：存储失败视为临时错误，可重试（使用 del.Redelivered 或 header 来决定是否丢弃）。
+		//
+		// 设计权衡：
+		// - 采用 republish 而不是直接 nack requeue=true 的原因是我们想在重试时增加/修改 header（x-attempts），
+		//   以便精确控制最大重试次数。直接 requeue 无法修改 header。
+		// - 目前实现是立即重试（republish 立刻入队），若需延迟重试应引入延迟队列/TTL 或 RabbitMQ 的 delayed-message 插件。
+		// - 当消息进入 DLQ 时，应该有独立的监控/处理流程用于人工排查或自动补救（例如把修复后的消息回放）。
 		go func(del amqp.Delivery) {
 			defer func() { <-sem; wg.Done() }()
 
@@ -121,6 +188,7 @@ func (q *amqpQueue) Consume() error {
 			if err := json.Unmarshal(del.Body, &vt); err != nil {
 				log.Printf("Invalid task payload: %v", err)
 				// 非法消息，丢弃或送 DLQ（这里选择不重试）
+				// 注：对非法消息直接 Nack(false,false) 会触发队列的 x-dead-letter-exchange 路由到 DLQ
 				_ = del.Nack(false, false)
 				return
 			}
@@ -134,19 +202,54 @@ func (q *amqpQueue) Consume() error {
 				upper := strings.ToUpper(es)
 				isPermanent := strings.Contains(upper, "INVALID_ARGUMENT") || strings.Contains(es, "400")
 				if isPermanent {
+					// 永久错误：参数不合法等原因，重试无意义，直接送 DLQ
 					log.Printf("Permanent error calling video analysis API, task id: %s: %v", taskIDStr, err)
-					// 永久错误：不要重试，丢弃或送 DLQ（这里选择不重试）
 					_ = del.Nack(false, false)
 					return
 				}
-				// 如果是已重试过的消息，避免无限重试，丢弃或转 DLQ
-				if del.Redelivered {
-					log.Printf("Repeated failure calling video analysis API, task id: %s: %v", taskIDStr, err)
+
+				// 检查 header 中的重试计数（x-attempts），决定是否把消息送入 DLQ
+				attempts := 0
+				if h, ok := del.Headers["x-attempts"]; ok {
+					switch v := h.(type) {
+					case int:
+						attempts = v
+					case int32:
+						attempts = int(v)
+					case int64:
+						attempts = int(v)
+					case string:
+						if n, err := strconv.Atoi(v); err == nil {
+							attempts = n
+						}
+					}
+				}
+
+				// 重试策略：最多重试 maxRetries 次，超过则进入 DLQ
+				maxRetries := 3
+				if attempts >= maxRetries {
+					log.Printf("Exceeded retries, sending to DLQ, task id: %s: %v", taskIDStr, err)
+					// 发送到死信队列（通过 nack requeue=false 按队列 x-dead-letter 配置路由）
 					_ = del.Nack(false, false)
 					return
 				}
-				log.Printf("Temporary error calling video analysis API, task id: %s: %v; requeueing once", taskIDStr, err)
-				_ = del.Nack(false, true)
+
+				// 重新发布消息到主队列并增加 attempts header，然后 ack 当前消息以避免重复
+				// 说明：使用 republish + ack 而不是 nack(requeue=true) 的原因是我们可以修改 header（x-attempts）
+				newHeaders := amqp.Table{}
+				for k, v := range del.Headers {
+					newHeaders[k] = v
+				}
+				newHeaders["x-attempts"] = attempts + 1
+
+				if err := q.publishWithHeaders(del.Body, newHeaders); err != nil {
+					log.Printf("Failed to republish message for retry, task id: %s: %v", taskIDStr, err)
+					// republish 失败，选择将原消息 nack 并不重入（可改为重入或记录为警告）
+					_ = del.Nack(false, false)
+					return
+				}
+				log.Printf("Requeued message for retry #%d, task id: %s", attempts+1, taskIDStr)
+				_ = del.Ack(false)
 				return
 			}
 
@@ -163,6 +266,25 @@ func (q *amqpQueue) Consume() error {
 					_ = del.Nack(false, true)
 				}
 				return
+			}
+
+			// 成功存储到 Redis 之后，通过 SSE 通知前端（按 task_id topic 发布）
+			// 构造通知载荷（可根据前端约定调整字段）
+			payload := struct {
+				UserID uint64 `json:"user_id"`
+				TaskID uint64 `json:"task_id"`
+				Status string `json:"status"`
+				Result string `json:"result,omitempty"`
+			}{
+				UserID: vt.UserID,
+				TaskID: vt.TaskID,
+				Status: vt.Status,
+				Result: vt.Result,
+			}
+			if hub := sse.GetHub(); hub != nil {
+				if b, err := json.Marshal(payload); err == nil {
+					hub.PublishTopic(strconv.FormatUint(vt.TaskID, 10), b)
+				}
 			}
 
 			// 成功处理后 ack
