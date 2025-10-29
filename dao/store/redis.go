@@ -74,3 +74,15 @@ func T2IImage(T2IRequest task.T2IRequest, url string) error {
 	}
 	return nil
 }
+
+func I2VTaskVideoURL(taskID string, videoURL string) error {
+	//将任务存储到redis中
+	key := "i2v:task:" + taskID + ":video_url"
+	err := Client.Set(key, videoURL, 24*time.Hour).Err()
+	if err != nil {
+		//日志报错
+		log.Printf("Failed to store i2v video url for task %s: %v", taskID, err)
+		return err
+	}
+	return nil
+}

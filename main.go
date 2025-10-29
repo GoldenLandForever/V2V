@@ -5,6 +5,7 @@ import (
 	"V2V/dao/store"
 	"V2V/pkg/queue"
 	"V2V/pkg/snowflake"
+	sse "V2V/pkg/sse"
 	"log"
 	"os"
 
@@ -52,9 +53,18 @@ func main() {
 
 	r := gin.Default()
 
+	// 初始化并启动 SSE hub
+	sseHub := sse.NewHub()
+	sse.SetDefaultHub(sseHub)
+	go sseHub.Run()
+
+	r.GET("/events", sse.ServeSSE)
+
 	r.POST("/V2T", controller.SubmitV2TTask)
 	r.POST("/V2T/LoraText", controller.LoraText)
 	r.POST("/T2I", controller.SubmitT2ITask)
 	r.GET("/V2T/:task_id", controller.GetV2TTaskResult)
+	r.POST("/I2V", controller.SubmitI2VTask)
+	r.GET("/I2V/:task_id", controller.GetI2VTaskResult)
 	r.Run()
 }
