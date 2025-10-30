@@ -40,6 +40,21 @@ func main() {
 		}
 	}()
 
+	// 初始化单例 T2I RabbitMQ
+	if err := queue.InitT2IRabbitMQ(dsn); err != nil {
+		log.Fatalf("Failed to init T2I RabbitMQ: %v", err)
+	}
+	t2iRabbitMQ, err := queue.GetT2IRabbitMQ()
+	if err != nil {
+		log.Fatalf("Failed to get T2I RabbitMQ instance: %v", err)
+	}
+	defer t2iRabbitMQ.Close()
+	go func() {
+		if err := t2iRabbitMQ.ConsumeT2I(); err != nil {
+			log.Fatalf("T2I rabbit consume failed: %v", err)
+		}
+	}()
+
 	err = store.Init("localhost:6379")
 	if err != nil {
 		log.Fatalf("Failed to init Redis: %v", err)
