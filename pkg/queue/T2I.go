@@ -23,7 +23,7 @@ import (
 
 // T2IMessageQueue 文字生图像专用队列接口
 type T2IMessageQueue interface {
-	PublishT2ITask([]byte) error
+	PublishT2ITask([]byte, int) error
 	ConsumeT2I() error
 	Close() error
 }
@@ -107,9 +107,12 @@ func newT2IAMQPQueue(dsn string) (T2IMessageQueue, error) {
 	args := amqp.Table{
 		"x-dead-letter-exchange":    dlxName,
 		"x-dead-letter-routing-key": dlqName,
+		"x-max-priority":            10,
 	}
 
 	// 声明T2I任务队列
+
+	// _, _ = ch.QueueDelete("t2i_tasks", false, false, false)
 	q, err := ch.QueueDeclare(
 		"t2i_tasks", // 队列名称不同
 		true,        // durable
@@ -131,7 +134,7 @@ func newT2IAMQPQueue(dsn string) (T2IMessageQueue, error) {
 }
 
 // PublishT2ITask 发布T2I任务
-func (q *t2iAMQPQueue) PublishT2ITask(b []byte) error {
+func (q *t2iAMQPQueue) PublishT2ITask(b []byte, priority int) error {
 
 	return q.ch.Publish(
 		"", q.queueName, false, false,
@@ -139,6 +142,7 @@ func (q *t2iAMQPQueue) PublishT2ITask(b []byte) error {
 			ContentType:  "application/json",
 			Body:         b,
 			DeliveryMode: amqp.Persistent,
+			Priority:     uint8(priority),
 		},
 	)
 }
@@ -150,6 +154,7 @@ func (q *t2iAMQPQueue) publishWithHeaders(b []byte, headers amqp.Table) error {
 		Body:         b,
 		DeliveryMode: amqp.Persistent,
 		Headers:      headers,
+		Priority:     5, // 默认中等优先级
 	}
 	return q.ch.Publish("", q.queueName, false, false, msg)
 }

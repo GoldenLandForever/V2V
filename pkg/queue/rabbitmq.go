@@ -19,7 +19,7 @@ import (
 
 // MessageQueue 是队列最小接口（用于发布与消费）
 type MessageQueue interface {
-	Publish([]byte) error
+	Publish([]byte, int) error
 	Consume() error
 	Close() error
 }
@@ -110,8 +110,9 @@ func newAMQPQueue(dsn string) (MessageQueue, error) {
 	args := amqp.Table{
 		"x-dead-letter-exchange":    dlxName,
 		"x-dead-letter-routing-key": dlqName,
+		"x-max-priority":            10,
 	}
-
+	// _, _ = ch.QueueDelete("v2t_tasks", false, false, false)
 	q, err := ch.QueueDeclare(
 		"v2t_tasks", // name
 		true,        // durable
@@ -131,10 +132,10 @@ func newAMQPQueue(dsn string) (MessageQueue, error) {
 	return &amqpQueue{conn: conn, ch: ch, queueName: q.Name}, nil
 }
 
-func (q *amqpQueue) Publish(b []byte) error {
+func (q *amqpQueue) Publish(b []byte, priority int) error {
 	return q.ch.Publish(
 		"", q.queueName, false, false,
-		amqp.Publishing{ContentType: "application/json", Body: b, DeliveryMode: amqp.Persistent},
+		amqp.Publishing{ContentType: "application/json", Body: b, DeliveryMode: amqp.Persistent, Priority: uint8(priority)},
 	)
 }
 

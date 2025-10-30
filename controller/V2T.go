@@ -51,7 +51,7 @@ func SubmitV2TTask(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "failed to serialize task"})
 		return
 	}
-	err = rabbitMQ.Publish([]byte(b))
+	err = rabbitMQ.Publish([]byte(b), V2TTask.Priority)
 	if err != nil {
 		//回溯redis
 		c.JSON(500, gin.H{"error": "failed to publish task"})
