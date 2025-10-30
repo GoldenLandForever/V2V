@@ -63,13 +63,26 @@ func V2TTask(t task.V2TTask) error {
 // 	return json.Unmarshal(b, out)
 // }
 
-func T2IImage(T2IRequest task.T2IRequest, url string) error {
+func T2ITask(t2iTask task.T2ITask) error {
 	//将任务存储到redis中
-	key := "user:" + strconv.FormatUint(T2IRequest.UserID, 10) + ":task:" + strconv.FormatUint(T2IRequest.TaskID, 10)
-	err := Client.Set(key, url, 24*time.Hour).Err()
+
+	key := "user:" + strconv.FormatUint(t2iTask.UserID, 10) + ":task:" + strconv.FormatUint(t2iTask.TaskID, 10)
+	// 一次设置多个字段（HSet 支持 map）
+	fields := map[string]interface{}{
+		"prompt":     t2iTask.Prompt,
+		"status":     t2iTask.Status,
+		"result":     t2iTask.Result,
+		"priority":   t2iTask.Priority,
+		"created_at": t2iTask.CreatedAt,
+	}
+	// 使用 pipeline（或 TxPipeline）把 HSet 和 Expire 放在同一个请求组里
+	pipe := Client.Pipeline()
+	pipe.HMSet(key, fields) // 或 pipe.HSet(key, fields) 视版本而定
+	pipe.Expire(key, 24*time.Hour)
+	_, err := pipe.Exec()
 	if err != nil {
 		//日志报错
-		log.Printf("Failed to store t2i image for prompt %s: %v", T2IRequest.Text, err)
+		log.Printf("Failed to store t2i task %s: %v", t2iTask.TaskID, err)
 		return err
 	}
 	return nil

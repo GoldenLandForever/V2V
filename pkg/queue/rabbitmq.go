@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/streadway/amqp"
 	"google.golang.org/genai"
@@ -331,6 +332,12 @@ const videoAnalysisText = `#角色你是一位专业且经验丰富的影视分�
 合理调整：优化镜头设计，充分考量制作成本与技术难度，避免复杂镜头影响实际执行。`
 
 func callVideoAnalysisAPI(url string) (string, error) {
+	//计算执行时间
+	starttime := time.Now()
+	defer func() {
+		elapsed := time.Since(starttime)
+		log.Printf("Video analysis API call took %s", elapsed)
+	}()
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, nil)
 	if err != nil {
