@@ -39,7 +39,7 @@ func SubmitT2ITask(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "failed to serialize T2I task"})
 		return
 	}
-	err = rabbitMQ.PublishT2ITask(b)
+	err = rabbitMQ.PublishT2ITask(b, T2IRequest.Priority)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "failed to publish T2I task"})
 		return
