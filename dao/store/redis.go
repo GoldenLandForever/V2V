@@ -99,3 +99,19 @@ func I2VTaskVideoURL(taskID string, videoURL string) error {
 	}
 	return nil
 }
+
+func I2VTaskID(taskID, index int, callbacktaskID string) error {
+	//将任务存储到redis中
+	key := "user:0:i2vtask:" + strconv.Itoa(taskID)
+	// 使用 ZAdd 存储分镜任务ID，成员为 callbacktaskID，分数为 index
+	err := Client.ZAdd(key, redis.Z{
+		Score:  float64(index),
+		Member: callbacktaskID,
+	}).Err()
+	if err != nil {
+		//日志报错
+		log.Printf("Failed to store i2v task id for task %d part %d: %v", taskID, index, err)
+		return err
+	}
+	return nil
+}

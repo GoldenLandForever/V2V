@@ -63,7 +63,7 @@ func SubmitV2TTask(c *gin.Context) {
 func GetV2TTaskResult(c *gin.Context) {
 	//获取任务结果
 	taskID := c.Param("task_id")
-	key := "user:1:task:" + taskID
+	key := "user:0:task:" + taskID
 	log.Printf("Raw taskID: %q", taskID)
 	hash, err := store.GetRedis().HGetAll(key).Result()
 	if err != nil {
