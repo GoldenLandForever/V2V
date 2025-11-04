@@ -48,7 +48,7 @@ func V2TTask(t task.V2TTask) error {
 	// 使用 pipeline（或 TxPipeline）把 HSet 和 Expire 放在同一个请求组里
 	pipe := Client.Pipeline()
 	pipe.HMSet(key, fields) // 或 pipe.HSet(key, fields) 视版本而定
-	pipe.Expire(key, 24*time.Hour)
+	// pipe.Expire(key, 24*time.Hour)
 	_, err := pipe.Exec()
 	if err != nil {
 		//日志报错
@@ -78,7 +78,7 @@ func T2ITask(t2iTask task.T2ITask) error {
 	// 使用 pipeline（或 TxPipeline）把 HSet 和 Expire 放在同一个请求组里
 	pipe := Client.Pipeline()
 	pipe.HMSet(key, fields) // 或 pipe.HSet(key, fields) 视版本而定
-	pipe.Expire(key, 24*time.Hour)
+	// pipe.Expire(key, 24*time.Hour)
 	_, err := pipe.Exec()
 	if err != nil {
 		//日志报错
