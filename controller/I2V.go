@@ -232,15 +232,16 @@ return {redis.call('HGET', key, 'succeeded'), redis.call('HGET', key, 'failed'),
 	succeeded, _ := strconv.ParseInt(succeededStr, 10, 64)
 	failedCnt, _ := strconv.ParseInt(failedStr, 10, 64)
 	total, _ := strconv.ParseInt(totalStr, 10, 64)
-	_, _ = strconv.ParseInt(changedFlagStr, 10, 64)
+	changedFlag, _ := strconv.ParseInt(changedFlagStr, 10, 64)
 
 	// 如果所有子任务完成（成功+失败 >= total），可以做后续处理
-	if succeeded+failedCnt >= total && total > 0 {
+	if succeeded+failedCnt >= total && total > 0 && changedFlag == 1 {
 		fmt.Printf("All I2V subtasks completed for main task %s\n", taskID)
 	}
 
 	// 如果全部成功，则触发视频拼接（此处异步触发）
-	if succeeded == total && total > 0 {
+	// 只处理一次全部成功的情况
+	if succeeded == total && total > 0 && changedFlag == 1 {
 		fmt.Printf("All I2V subtasks succeeded for main task %s, starting video concatenation\n", taskID)
 		go func(tid string) {
 			// util.FFmpeg 目前在实现中使用硬编码的 key。建议 future 改为接受 taskID。
