@@ -8,6 +8,7 @@ import (
 
 func FFmpegHandler(c *gin.Context) {
 	// 调用 FFmpeg 相关功能的代码
-	util.FFmpeg()
+	taskID := c.Param("task_id")
+	util.FFmpeg(taskID)
 	c.JSON(200, gin.H{"message": "FFmpeg handler is not yet implemented"})
 }

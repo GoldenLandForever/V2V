@@ -144,7 +144,7 @@ func (q *i2vAMQPQueue) ConsumeI2V() error {
 	go func() {
 		for d := range msgs {
 			// 处理I2V任务消息
-			var i2vTask task.I2VRequest
+			var i2vTask task.I2VTask
 			err := json.Unmarshal(d.Body, &i2vTask)
 			if err != nil {
 				fmt.Printf("Failed to unmarshal I2V task: %v\n", err)
@@ -153,7 +153,7 @@ func (q *i2vAMQPQueue) ConsumeI2V() error {
 			}
 
 			// 创建I2V任务
-			err = createI2VTask(i2vTask.ImageURL, i2vTask.Prompt, int(i2vTask.TaskID), int(i2vTask.TaskID))
+			err = createI2VTask(i2vTask.ImageURL, i2vTask.Prompt, i2vTask.Index, int(i2vTask.TaskID))
 			if err != nil {
 				fmt.Printf("Failed to create I2V task: %v\n", err)
 				d.Nack(false, true) // 重试
@@ -161,7 +161,7 @@ func (q *i2vAMQPQueue) ConsumeI2V() error {
 			}
 
 			d.Ack(false)
-			fmt.Printf("I2V task processed successfully: %+v\n", i2vTask)
+			fmt.Printf("I2V task processed successfully: UserID=%d, TaskID=%d, Index=%d\n", i2vTask.UserID, i2vTask.TaskID, i2vTask.Index)
 		}
 	}()
 
@@ -190,7 +190,7 @@ func createI2VTask(refImg, prompts string, index, taskID int) error {
 		Content: []*model.CreateContentGenerationContentItem{
 			{
 				Type: model.ContentGenerationContentItemTypeText,
-				Text: volcengine.String("根据文本与参考图生成第" + strconv.FormatInt(int64(index), 10) + "张分镜的视频" + prompts),
+				Text: volcengine.String("根据文本与参考图生成第" + strconv.FormatInt(int64(index), 10) + "张分镜的视频" + prompts + " --resolution 720p"),
 			},
 			{
 				Type: model.ContentGenerationContentItemTypeImage,

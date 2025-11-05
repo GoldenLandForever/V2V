@@ -26,14 +26,20 @@ func SubmitI2VTask(c *gin.Context) {
 	// 请确保您已将 API Key 存储在环境变量 ARK_API_KEY 中
 	// 初始化Ark客户端，从环境变量中读取您的API Key
 	//测试一下功能
-	key := "user:0:task:197757035368939521"
+	var t task.I2VTask
+	// 从请求体中解析任务参数
+	if err := c.ShouldBindJSON(&t); err != nil {
+		c.JSON(400, gin.H{"error": "invalid request"})
+		return
+	}
+	key := "user:0:task:" + strconv.FormatInt(int64(t.TaskID), 10)
 	// 从redis里找key获得参考图和文本提示词
 	hash, err := store.GetRedis().HGetAll(key).Result()
 	if err != nil {
 		fmt.Printf("failed to get task from redis: %v\n", err)
 		return
 	}
-	prompts := hash["prompts"]
+	prompts := hash["prompt"]
 	referenceImages := strings.Split(hash["result"], "|z|k|x|")
 	//去掉refereceImages尾部的无用字符串
 	referenceImages = referenceImages[:len(referenceImages)-1]
@@ -67,9 +73,10 @@ func SubmitI2VTask(c *gin.Context) {
 		fmt.Printf("Processing reference image %d: %s\n", i+1, refImg)
 		go func(idx int, img string) {
 			defer wg.Done()
-			var I2Vtask task.I2VRequest
+			var I2Vtask task.I2VTask
 			I2Vtask.UserID = 0
 			I2Vtask.TaskID = uint64(taskID)
+			I2Vtask.Index = idx + 1
 			I2Vtask.ImageURL = img
 			I2Vtask.Prompt = prompts
 			I2Vtask.Priority = 1
@@ -251,7 +258,7 @@ return {redis.call('HGET', key, 'succeeded'), redis.call('HGET', key, 'failed'),
 		fmt.Printf("All I2V subtasks succeeded for main task %s, starting video concatenation\n", taskID)
 		go func(tid string) {
 			// util.FFmpeg 目前在实现中使用硬编码的 key。建议 future 改为接受 taskID。
-			util.FFmpeg()
+			util.FFmpeg(tid)
 			payload := struct {
 				UserID uint64 `json:"user_id"`
 				TaskID uint64 `json:"task_id"`

@@ -320,7 +320,7 @@ func T2IHandler(T2IRequest task.T2ITask) (model.ImagesResponse, error) {
 	generateReq := model.GenerateImagesRequest{
 		Model:                     "doubao-seedream-4-0-250828",
 		Prompt:                    "请按照分镜数生成图像数" + T2IRequest.Prompt,
-		Size:                      volcengine.String("2K"),
+		Size:                      volcengine.String("1K"),
 		ResponseFormat:            volcengine.String(model.GenerateImagesResponseFormatURL),
 		Watermark:                 volcengine.Bool(true),
 		Seed:                      volcengine.Int64(42),

@@ -97,6 +97,6 @@ func main() {
 	r.POST("/I2V", controller.SubmitI2VTask)
 	r.GET("/I2V/:task_id", controller.GetI2VTaskResult)
 	r.POST("/I2VCallback/:task_id", controller.I2VCallback)
-	r.GET("/FFmpeg", controller.FFmpegHandler)
+	r.GET("/FFmpeg/:task_id", controller.FFmpegHandler)
 	r.Run()
 }
