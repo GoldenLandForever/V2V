@@ -55,6 +55,21 @@ func main() {
 		}
 	}()
 
+	// 初始化单例 I2V RabbitMQ
+	if err := queue.InitI2VRabbitMQ(dsn); err != nil {
+		log.Fatalf("Failed to init I2V RabbitMQ: %v", err)
+	}
+	i2vRabbitMQ, err := queue.GetI2VRabbitMQ()
+	if err != nil {
+		log.Fatalf("Failed to get I2V RabbitMQ instance: %v", err)
+	}
+	defer i2vRabbitMQ.Close()
+	go func() {
+		if err := i2vRabbitMQ.ConsumeI2V(); err != nil {
+			log.Fatalf("I2V rabbit consume failed: %v", err)
+		}
+	}()
+
 	err = store.Init("localhost:6379")
 	if err != nil {
 		log.Fatalf("Failed to init Redis: %v", err)
@@ -82,5 +97,6 @@ func main() {
 	r.POST("/I2V", controller.SubmitI2VTask)
 	r.GET("/I2V/:task_id", controller.GetI2VTaskResult)
 	r.POST("/I2VCallback/:task_id", controller.I2VCallback)
+	r.GET("/FFmpeg", controller.FFmpegHandler)
 	r.Run()
 }

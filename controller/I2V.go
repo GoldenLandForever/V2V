@@ -2,9 +2,12 @@ package controller
 
 import (
 	"V2V/dao/store"
+	"V2V/pkg/queue"
 	"V2V/pkg/snowflake"
+	"V2V/pkg/sse"
+	"V2V/task"
 	"V2V/util"
-	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -14,7 +17,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/volcengine/volcengine-go-sdk/service/arkruntime"
 	"github.com/volcengine/volcengine-go-sdk/service/arkruntime/model"
-	"github.com/volcengine/volcengine-go-sdk/volcengine"
 )
 
 //把这个接口改成一次性输入多个参考图和文本提示词，生成多个视频
@@ -54,12 +56,33 @@ func SubmitI2VTask(c *gin.Context) {
 	redisclient.HSet(statusKey, "succeeded", 0)
 	redisclient.HSet(statusKey, "failed", 0)
 
+	rabbitMQ, err := queue.GetI2VRabbitMQ()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "failed to get I2V message queue"})
+		return
+	}
+	// 提交每个参考图的I2V任务
 	for i, refImg := range referenceImages {
 		wg.Add(1)
 		fmt.Printf("Processing reference image %d: %s\n", i+1, refImg)
 		go func(idx int, img string) {
 			defer wg.Done()
-			err := createI2VTask(img, prompts, idx+1, int(taskID))
+			var I2Vtask task.I2VRequest
+			I2Vtask.UserID = 0
+			I2Vtask.TaskID = uint64(taskID)
+			I2Vtask.ImageURL = img
+			I2Vtask.Prompt = prompts
+			I2Vtask.Priority = 1
+			b, err := json.Marshal(I2Vtask)
+			if err != nil {
+				errors <- TaskError{Index: idx + 1, Err: err}
+				return
+			}
+			err = rabbitMQ.PublishI2VTask(b, I2Vtask.Priority)
+			if err != nil {
+				errors <- TaskError{Index: idx + 1, Err: err}
+				return
+			}
 			errors <- TaskError{Index: idx + 1, Err: err}
 		}(i, refImg)
 	}
@@ -79,42 +102,6 @@ func SubmitI2VTask(c *gin.Context) {
 		return
 	}
 	c.JSON(202, gin.H{"task_id": taskID, "status": "submitted"})
-}
-
-func createI2VTask(refImg, prompts string, index, taskID int) error {
-	client := arkruntime.NewClientWithApiKey(
-		os.Getenv("ARK_API_KEY"),
-		arkruntime.WithBaseUrl("https://ark.cn-beijing.volces.com/api/v3"),
-	)
-	ctx := context.Background()
-	modelEp := "doubao-seedance-1-0-pro-250528"
-
-	fmt.Println("----- create content generation task -----")
-
-	createReq := model.CreateContentGenerationTaskRequest{
-		Model: modelEp,
-		Content: []*model.CreateContentGenerationContentItem{
-			{
-				Type: model.ContentGenerationContentItemTypeText,
-				Text: volcengine.String("根据文本与参考图生成第" + strconv.FormatInt(int64(index), 10) + "张分镜的视频" + prompts),
-			},
-			{
-				Type: model.ContentGenerationContentItemTypeImage,
-				ImageURL: &model.ImageURL{
-					URL: refImg,
-				},
-			},
-		},
-	}
-
-	createResponse, err := client.CreateContentGenerationTask(ctx, createReq)
-	if err != nil {
-		fmt.Printf("create content generation error: %v", err)
-		return err
-	}
-	fmt.Printf("Task Created with ID: %s \n", createResponse.ID)
-	err = store.I2VTaskID(taskID, index, createResponse.ID)
-	return err
 }
 
 func GetI2VTaskResult(c *gin.Context) {
@@ -233,10 +220,29 @@ return {redis.call('HGET', key, 'succeeded'), redis.call('HGET', key, 'failed'),
 	failedCnt, _ := strconv.ParseInt(failedStr, 10, 64)
 	total, _ := strconv.ParseInt(totalStr, 10, 64)
 	changedFlag, _ := strconv.ParseInt(changedFlagStr, 10, 64)
-
+	uintTaskID, _ := strconv.ParseUint(taskID, 10, 64)
 	// 如果所有子任务完成（成功+失败 >= total），可以做后续处理
 	if succeeded+failedCnt >= total && total > 0 && changedFlag == 1 {
 		fmt.Printf("All I2V subtasks completed for main task %s\n", taskID)
+
+		// SSE通知
+		payload := struct {
+			UserID uint64 `json:"user_id"`
+			TaskID uint64 `json:"task_id"`
+			Status string `json:"status"`
+			Result string `json:"result,omitempty"`
+		}{
+			UserID: 0,
+			TaskID: uintTaskID,
+			Status: "falied",
+			Result: "暂时不搞",
+		}
+
+		if hub := sse.GetHub(); hub != nil {
+			if b, err := json.Marshal(payload); err == nil {
+				hub.PublishTopic("0", b)
+			}
+		}
 	}
 
 	// 如果全部成功，则触发视频拼接（此处异步触发）
@@ -246,6 +252,23 @@ return {redis.call('HGET', key, 'succeeded'), redis.call('HGET', key, 'failed'),
 		go func(tid string) {
 			// util.FFmpeg 目前在实现中使用硬编码的 key。建议 future 改为接受 taskID。
 			util.FFmpeg()
+			payload := struct {
+				UserID uint64 `json:"user_id"`
+				TaskID uint64 `json:"task_id"`
+				Status string `json:"status"`
+				Result string `json:"result,omitempty"`
+			}{
+				UserID: 0,
+				TaskID: uintTaskID,
+				Status: "succeeded",
+				Result: "暂时不搞",
+			}
+
+			if hub := sse.GetHub(); hub != nil {
+				if b, err := json.Marshal(payload); err == nil {
+					hub.PublishTopic("0", b)
+				}
+			}
 			//通知用户
 		}(taskID)
 	}

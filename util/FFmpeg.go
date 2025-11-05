@@ -163,6 +163,7 @@ func (vp *VideoProcessor) ConcatVideos(listFile string) error {
 	cmd := exec.Command("ffmpeg",
 		"-f", "concat",
 		"-safe", "0",
+		"-vf", "setpts=0.6667*PTS",
 		"-i", listFile,
 		"-c", "copy", // 流复制，不重新编码
 		vp.outputPath)
@@ -180,6 +181,7 @@ func (vp *VideoProcessor) ConcatVideos(listFile string) error {
 			"-f", "concat",
 			"-safe", "0",
 			"-i", listFile,
+			"-vf", "setpts=0.6667*PTS",
 			"-c:v", "libx264",
 			"-preset", "medium",
 			"-crf", "23",
@@ -251,7 +253,7 @@ func FFmpeg() {
 		}
 		urls = append(urls, url)
 	}
-	outputPath := "/media/xc/my/V2V/output.mp4"
+	outputPath := "/media/xc/my/output.mp4"
 	err = DownloadAndConcatVideos(urls, outputPath)
 	if err != nil {
 		log.Fatalf("处理失败: %v", err)
