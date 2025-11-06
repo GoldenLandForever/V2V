@@ -27,7 +27,7 @@ type delayedI2VAMQPQueue struct {
 	queueName string
 }
 
-func newDelayedI2VAMQPQueue(dsn string) (DelayedI2VQueue, error) {
+func NewDelayedI2VAMQPQueue(dsn string) (DelayedI2VQueue, error) {
 	conn, err := amqp.Dial(dsn)
 	if err != nil {
 		return nil, err
@@ -216,7 +216,7 @@ func InitDelayedI2VQueue(dsn string) error {
 		return nil
 	}
 
-	inst, err := newDelayedI2VAMQPQueue(dsn)
+	inst, err := NewDelayedI2VAMQPQueue(dsn)
 	if err != nil {
 		delayedInitErr = err
 		return err

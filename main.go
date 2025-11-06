@@ -7,6 +7,9 @@ import (
 	"V2V/pkg/snowflake"
 	sse "V2V/pkg/sse"
 	"log"
+	"net/http"
+	"net/http/pprof"
+	_ "net/http/pprof"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -69,6 +72,11 @@ func main() {
 			log.Fatalf("I2V rabbit consume failed: %v", err)
 		}
 	}()
+	//初始化延迟队列 I2V RabbitMQ
+	err = queue.InitDelayedI2VQueue(dsn)
+	if err != nil {
+		log.Fatalf("Failed to init delayed I2V RabbitMQ: %v", err)
+	}
 
 	err = store.Init("localhost:6379")
 	if err != nil {
@@ -87,7 +95,7 @@ func main() {
 	sseHub := sse.NewHub()
 	sse.SetDefaultHub(sseHub)
 	go sseHub.Run()
-
+	registerPprof(r)
 	r.GET("/events", sse.ServeSSE)
 
 	r.POST("/V2T", controller.SubmitV2TTask)
@@ -99,4 +107,31 @@ func main() {
 	r.POST("/I2VCallback/:task_id", controller.I2VCallback)
 	r.GET("/FFmpeg/:task_id", controller.FFmpegHandler)
 	r.Run()
+
+}
+
+func registerPprof(router *gin.Engine) {
+	// pprof 路由组
+	pprofGroup := router.Group("/debug/pprof")
+	{
+		pprofGroup.GET("/", pprofHandler(pprof.Index))
+		pprofGroup.GET("/cmdline", pprofHandler(pprof.Cmdline))
+		pprofGroup.GET("/profile", pprofHandler(pprof.Profile))
+		pprofGroup.POST("/symbol", pprofHandler(pprof.Symbol))
+		pprofGroup.GET("/symbol", pprofHandler(pprof.Symbol))
+		pprofGroup.GET("/trace", pprofHandler(pprof.Trace))
+		pprofGroup.GET("/allocs", pprofHandler(pprof.Handler("allocs").ServeHTTP))
+		pprofGroup.GET("/block", pprofHandler(pprof.Handler("block").ServeHTTP))
+		pprofGroup.GET("/goroutine", pprofHandler(pprof.Handler("goroutine").ServeHTTP))
+		pprofGroup.GET("/heap", pprofHandler(pprof.Handler("heap").ServeHTTP))
+		pprofGroup.GET("/mutex", pprofHandler(pprof.Handler("mutex").ServeHTTP))
+		pprofGroup.GET("/threadcreate", pprofHandler(pprof.Handler("threadcreate").ServeHTTP))
+	}
+}
+
+// pprofHandler 将 http.HandlerFunc 转换为 gin.HandlerFunc
+func pprofHandler(handler http.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		handler.ServeHTTP(c.Writer, c.Request)
+	}
 }
