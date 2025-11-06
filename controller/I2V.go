@@ -144,6 +144,25 @@ func I2VCallback(c *gin.Context) {
 	redisclient := store.GetRedis()
 	//更新redis中对应任务的状态和视频链接
 	key := "user:0:i2vtaskstatus:" + taskID
+
+	// 将任务加入延迟队列（5分钟后检查状态）
+	if delayedQueue, err := queue.GetDelayedI2VQueue(); err == nil {
+		b := struct {
+			TaskID    string `json:"task_id"`
+			SubTaskID string `json:"sub_task_id"`
+		}{
+			TaskID:    taskID,
+			SubTaskID: callbackData.ID,
+		}
+		body, err := json.Marshal(b)
+		if err != nil {
+			fmt.Printf("Failed to marshal delayed check task: %v\n", err)
+		}
+		if err := delayedQueue.PublishDelayedCheck(body); err != nil {
+			fmt.Printf("Failed to add to delayed queue: %v\n", err)
+			// 继续处理，不中断主流程
+		}
+	}
 	// 使用 Redis Lua 脚本做原子比较/更新：
 	// 返回值为数组：[succeeded, failed, total, changedFlag]
 	// changedFlag: 1 = 新写入或状态变更，0 = 状态未变化

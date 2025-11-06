@@ -209,5 +209,26 @@ func createI2VTask(refImg, prompts string, index, taskID int) error {
 	fmt.Printf("Task Created with ID: %s \n", createResponse.ID)
 	err = store.I2VTaskID(taskID, index, createResponse.ID)
 	// 将任务放入延迟队列，等待处理结果
+	delayedI2VAMQPQueueInstance, err := GetDelayedI2VQueue()
+	if err != nil {
+		fmt.Printf("Failed to get delayed I2V queue: %v\n", err)
+		return err
+	}
+	checkTask := struct {
+		TaskID    string `json:"task_id"`
+		SubTaskID string `json:"sub_task_id"`
+	}{
+		TaskID:    strconv.Itoa(taskID),
+		SubTaskID: createResponse.ID,
+	}
+	body, err := json.Marshal(checkTask)
+	if err != nil {
+		fmt.Printf("Failed to marshal delayed check task: %v\n", err)
+		return err
+	}
+	err = delayedI2VAMQPQueueInstance.PublishDelayedCheck(body) // 延迟60秒检查
+	if err != nil {
+		fmt.Printf("Failed to publish delayed check task: %v\n", err)
+	}
 	return err
 }
