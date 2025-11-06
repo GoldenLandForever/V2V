@@ -228,7 +228,7 @@ func (q *amqpQueue) Consume() error {
 				}
 
 				// 重试策略：最多重试 maxRetries 次，超过则进入 DLQ
-				maxRetries := 3
+				maxRetries := 1
 				if attempts >= maxRetries {
 					log.Printf("Exceeded retries, sending to DLQ, task id: %s: %v", taskIDStr, err)
 					// 发送到死信队列（通过 nack requeue=false 按队列 x-dead-letter 配置路由）
@@ -319,7 +319,7 @@ const videoAnalysisText = `#角色你是一位专业且经验丰富的影视分�
 根据构思的镜头序列，按照以下格式输出分镜脚本：
 镜号、景别、画面内容、台词、运镜方式、音效、时长、图片生成提示词、视频生成提示词
 对格式的具体要求：
-镜号：为每个镜头分配唯一编号，方便管理与引用（在不影响剧情的情况下给出最多15个分镜）。
+镜号：为每个镜头分配唯一编号，方便管理与引用（分镜数量与原视频保持一致）。
 景别：清晰描述镜头距离（近景、中景、远景、特写等），展现主体与背景的关系。
 画面内容：详细明确描述场景、人物、动作、细节，助力视觉化创意。
 台词 / 旁白：添加角色台词、旁白或文字提示（如需）。

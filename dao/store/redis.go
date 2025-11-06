@@ -88,9 +88,12 @@ func T2ITask(t2iTask task.T2ITask) error {
 	return nil
 }
 
+// bug :
+// 这个地方应该在I2V初始化一下
+// 而不是在FFmepeg初始化
 func I2VTaskVideoURL(taskID string, videoURL string) error {
 	//将任务存储到redis中
-	key := "i2v:task:" + taskID + ":video_url"
+	key := "user:0:i2vtask:" + taskID + ":video_url"
 	err := Client.Set(key, videoURL, 24*time.Hour).Err()
 	if err != nil {
 		//日志报错
@@ -108,9 +111,15 @@ func I2VTaskID(taskID, index int, callbacktaskID string) error {
 		Score:  float64(index),
 		Member: callbacktaskID,
 	}).Err()
+
 	if err != nil {
 		//日志报错
 		log.Printf("Failed to store i2v task id for task %d part %d: %v", taskID, index, err)
+		return err
+	}
+	err = I2VTaskVideoURL(callbacktaskID, "")
+	if err != nil {
+		log.Printf("Failed to initialize i2v video url for task %d: %v", taskID, err)
 		return err
 	}
 	return nil

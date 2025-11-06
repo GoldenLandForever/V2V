@@ -105,7 +105,7 @@ func (q *delayedI2VAMQPQueue) PublishDelayedCheck(b []byte) error {
 			ContentType: "application/json",
 			Body:        b,
 			Headers: amqp.Table{
-				"x-delay": 300000, // 5分钟 = 300000毫秒
+				"x-delay": 60000, // 5分钟 = 300000毫秒
 			},
 		},
 	)
@@ -141,16 +141,20 @@ func (q *delayedI2VAMQPQueue) ConsumeDelayedChecks() error {
 
 			// 检查Redis中的状态
 			redisClient := store.GetRedis()
-			key := "user:0:i2vtaskstatus:" + checkTask.TaskID
-			status, err := redisClient.HGet(key, checkTask.SubTaskID).Result()
+			key := "user:0:i2vtask:" + checkTask.SubTaskID + ":video_url"
+			status, err := redisClient.Get(key).Result()
 			if err != nil {
 				fmt.Printf("Failed to get task status from Redis: %v\n", err)
-				d.Nack(false, true) // 重试
+				fmt.Println("key:", key)
+				d.Nack(false, false) // 重试
 				continue
+			} else {
+				fmt.Println("succeed key:", key)
 			}
 
 			// 如果状态不是终态，则查询最新状态
-			if status != "succeeded" && status != "failed" {
+			// if status != "succeeded" && status != "failed" {
+			if status == "" {
 				client := arkruntime.NewClientWithApiKey(os.Getenv("ARK_API_KEY"))
 				ctx := context.Background()
 
