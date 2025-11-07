@@ -4,7 +4,6 @@ import (
 	"V2V/task"
 	"log"
 	"strconv"
-	"time"
 
 	"github.com/go-redis/redis"
 )
@@ -94,7 +93,15 @@ func T2ITask(t2iTask task.T2ITask) error {
 func I2VTaskVideoURL(taskID string, videoURL string) error {
 	//将任务存储到redis中
 	key := "user:0:i2vtask:" + taskID + ":video_url"
-	err := Client.Set(key, videoURL, 24*time.Hour).Err()
+	//应该用hash存储
+	fields := map[string]interface{}{
+		"video_url": videoURL,
+		"status":    "queued",
+	}
+	// 使用 pipeline（或 TxPipeline）把 HSet 和 Expire 放在同一个请求组里
+	pipe := Client.Pipeline()
+	pipe.HMSet(key, fields) // 或 pipe.HSet(key, fields) 视版本而定
+	_, err := pipe.Exec()
 	if err != nil {
 		//日志报错
 		log.Printf("Failed to store i2v video url for task %s: %v", taskID, err)

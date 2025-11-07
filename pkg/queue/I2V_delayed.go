@@ -142,7 +142,8 @@ func (q *delayedI2VAMQPQueue) ConsumeDelayedChecks() error {
 			// 检查Redis中的状态
 			redisClient := store.GetRedis()
 			key := "user:0:i2vtask:" + checkTask.SubTaskID + ":video_url"
-			status, err := redisClient.Get(key).Result()
+			key2 := "user:0:i2vtaskstatus:" + checkTask.TaskID
+			status, err := redisClient.HGet(key, "status").Result()
 			if err != nil {
 				fmt.Printf("Failed to get task status from Redis: %v\n", err)
 				fmt.Println("key:", key)
@@ -153,8 +154,7 @@ func (q *delayedI2VAMQPQueue) ConsumeDelayedChecks() error {
 			}
 
 			// 如果状态不是终态，则查询最新状态
-			// if status != "succeeded" && status != "failed" {
-			if status == "" {
+			if status != "succeeded" && status != "failed" {
 				client := arkruntime.NewClientWithApiKey(os.Getenv("ARK_API_KEY"))
 				ctx := context.Background()
 
@@ -180,19 +180,20 @@ func (q *delayedI2VAMQPQueue) ConsumeDelayedChecks() error {
 					local field = ARGV[1]
 					local new = ARGV[2]
 					local video_url = ARGV[3]
+					local key2 = ARGV[4]
 					local old = redis.call('HGET', key, field)
 					if old == 'succeeded' or old == 'failed' then
-						return {redis.call('HGET', key, 'succeeded'), redis.call('HGET', key, 'failed')}
+						return {redis.call('HGET', key2, 'succeeded'), redis.call('HGET', key2, 'failed')}
 					end
 					redis.call('HSET', key, field, new)
 					if new == 'succeeded' then
-						redis.call('HINCRBY', key, 'succeeded', 1)
-						redis.call('SET', 'i2v:task:'..field..':video_url', video_url, 'EX', 86400)
+						redis.call('HINCRBY', key2, 'succeeded', 1)
+						redis.call('HSET', key, 'video_url', video_url)
 					elseif new == 'failed' then
-						redis.call('HINCRBY', key, 'failed', 1)
+						redis.call('HINCRBY', key2, 'failed', 1)
 					end
-					return {redis.call('HGET', key, 'succeeded'), redis.call('HGET', key, 'failed')}
-				`, []string{key}, checkTask.SubTaskID, strings.ToLower(resp.Status), contentURL).Result()
+					return {redis.call('HGET', key2, 'succeeded'), redis.call('HGET', key2, 'failed')}
+				`, []string{key}, "status", strings.ToLower(resp.Status), contentURL, key2).Result()
 
 				if err != nil {
 					fmt.Printf("Failed to update Redis status: %v\n", err)
