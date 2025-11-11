@@ -159,46 +159,40 @@ func (vp *VideoProcessor) ConcatVideos(listFile string) error {
 		return fmt.Errorf("ffmpeg未找到，请先安装ffmpeg并添加到PATH: %v", err)
 	}
 
-	// 尝试使用流复制（最快）
+	audioPath := "/media/xc/my/V2V/util/backgroundmusic.mp3"
+
+	// 检查音频文件是否存在
+	if _, err := os.Stat(audioPath); os.IsNotExist(err) {
+		log.Printf("音频文件不存在，将生成无声视频: %s", audioPath)
+		// 如果没有音频文件，使用无声视频处理
+		return err
+	}
+
+	// 直接使用重新编码方式并添加音频（确保一定有声音）
 	cmd := exec.Command("ffmpeg",
 		"-f", "concat",
 		"-safe", "0",
-		"-vf", "setpts=0.6667*PTS",
 		"-i", listFile,
-		"-c", "copy", // 流复制，不重新编码
+		"-i", audioPath,
+		"-vf", "setpts=0.6667*PTS",
+		"-c:v", "libx264",
+		"-preset", "medium",
+		"-crf", "23",
+		"-c:a", "aac",
+		"-b:a", "128k",
+		"-map", "0:v:0",
+		"-map", "1:a:0",
+		"-shortest",
 		vp.outputPath)
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	log.Printf("执行命令: %s", cmd.String())
+	log.Printf("执行带音频的重新编码命令: %s", cmd.String())
 	err = cmd.Run()
-
 	if err != nil {
-		log.Printf("流复制失败，尝试重新编码: %v", err)
-		// 如果流复制失败，尝试重新编码
-		cmd = exec.Command("ffmpeg",
-			"-f", "concat",
-			"-safe", "0",
-			"-i", listFile,
-			"-vf", "setpts=0.6667*PTS",
-			"-c:v", "libx264",
-			"-preset", "medium",
-			"-crf", "23",
-			"-c:a", "aac",
-			"-b:a", "128k",
-			vp.outputPath)
-
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		log.Printf("执行重新编码命令: %s", cmd.String())
-		err = cmd.Run()
-		if err != nil {
-			return fmt.Errorf("视频拼接失败: %v", err)
-		}
+		return fmt.Errorf("视频拼接失败: %v", err)
 	}
-
 	return nil
 }
 
@@ -235,7 +229,7 @@ func DownloadAndConcatVideos(urls []string, outputPath string) error {
 	return nil
 }
 
-func FFmpeg(taskid string) {
+func FFmpeg(taskid string) string {
 	// 使用示例
 	redisclient := store.GetRedis()
 	// 测试效果
@@ -253,11 +247,49 @@ func FFmpeg(taskid string) {
 		}
 		urls = append(urls, url)
 	}
-	outputPath := "/media/xc/my/output.mp4"
-	err = DownloadAndConcatVideos(urls, outputPath)
+	// 确保输出目录存在（public/videos）
+	outDir := "./public/videos"
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		log.Fatalf("无法创建输出目录: %v", err)
+	}
+
+	// 临时拼接输出文件（随后会合并音频生成最终文件）
+	concatPath := filepath.Join(outDir, taskid+"_concat.mp4")
+	finalPath := filepath.Join(outDir, taskid+".mp4")
+
+	err = DownloadAndConcatVideos(urls, concatPath)
 	if err != nil {
 		log.Fatalf("处理失败: %v", err)
 	}
+	// 合并音频到最终输出
+	err = mergeVideoAudio(concatPath, "./util/backgroundmusic.mp3", finalPath)
+	if err != nil {
+		log.Fatalf("合并音频失败: %v", err)
+	}
+	// 删除临时拼接文件
+	if err := os.Remove(concatPath); err != nil {
+		log.Printf("删除临时文件失败: %v", err)
+	}
+	log.Printf("处理完成，输出文件: %s", finalPath)
+	return finalPath
+}
+
+func mergeVideoAudio(videoPath, audioPath, outputPath string) error {
+	cmd := exec.Command("ffmpeg",
+		"-i", videoPath, // 输入视频文件
+		"-i", audioPath, // 输入音频文件
+		"-c", "copy", // 直接流拷贝，不重新编码
+		"-shortest", // 以较短的流为准
+		"-y",        // 覆盖输出文件
+		outputPath,
+	)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ffmpeg执行失败: %v, 输出: %s", err, string(output))
+	}
+
+	return nil
 }
 
 func GetVideoURL(taskID string) (string, error) {

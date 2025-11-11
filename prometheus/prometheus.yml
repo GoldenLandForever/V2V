@@ -1,3 +1,4 @@
+#docker run -d --name prometheus   --network host   -v ./prometheus.yml:/etc/prometheus/prometheus.yml   prom/prometheus 
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -20,8 +21,8 @@ scrape_configs:
     scrape_interval: 10s
     scrape_timeout: 5s
 
-  - job_name: 'v2v-app'
-    static_configs:
-      - targets: ['localhost:8080']  # 你的 Go 应用
-    metrics_path: /metrics
-    scrape_interval: 15s
+  # - job_name: 'v2v-app'
+  #   static_configs:
+  #     - targets: ['localhost:8080']  # 你的 Go 应用
+  #   metrics_path: /metrics
+  #   scrape_interval: 15s

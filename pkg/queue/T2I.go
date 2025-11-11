@@ -166,7 +166,7 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 		return err
 	}
 
-	concurrency := 5 // T2I任务较耗资源，并发数减少
+	concurrency := 10 // T2I任务较耗资源，并发数减少
 	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 

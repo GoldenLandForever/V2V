@@ -1,0 +1,194 @@
+{
+  "info": {
+    "_postman_id": "v2v-api-collection",
+    "name": "V2V API",
+    "description": "视频处理相关 API 接口集合",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "V2T",
+      "item": [
+        {
+          "name": "提交视频转文字任务",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"video_url\": \"https://example.com/video.mp4\",\n  \"user_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/V2T",
+              "host": ["{{base_url}}"],
+              "path": ["V2T"]
+            }
+          }
+        },
+        {
+          "name": "获取 V2T 任务结果",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/V2T/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["V2T", "{{task_id}}"]
+            }
+          }
+        },
+        {
+          "name": "更新 Lora 文本",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": 1,\n  \"task_id\": 123456,\n  \"result\": \"更新的提示词\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/V2T/LoraText",
+              "host": ["{{base_url}}"],
+              "path": ["V2T", "LoraText"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "T2I",
+      "item": [
+        {
+          "name": "提交文字生成图片任务",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": 1,\n  \"text\": \"A beautiful sunset over mountains\",\n  \"priority\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/T2I",
+              "host": ["{{base_url}}"],
+              "path": ["T2I"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "I2V",
+      "item": [
+        {
+          "name": "提交图片生成视频任务",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"task_id\": 123456,\n  \"user_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/I2V",
+              "host": ["{{base_url}}"],
+              "path": ["I2V"]
+            }
+          }
+        },
+        {
+          "name": "获取 I2V 任务结果",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/I2V/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["I2V", "{{task_id}}"]
+            }
+          }
+        },
+        {
+          "name": "I2V 任务回调",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/I2VCallback/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["I2VCallback", "{{task_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "FFmpeg",
+      "item": [
+        {
+          "name": "FFmpeg 处理器",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/FFmpeg/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["FFmpeg", "{{task_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "SSE",
+      "item": [
+        {
+          "name": "连接 SSE 事件流",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": ["{{base_url}}"],
+              "path": ["events"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "task_id",
+      "value": ""
+    }
+  ]
+}

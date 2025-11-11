@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -171,6 +172,7 @@ func (q *delayedI2VAMQPQueue) ConsumeDelayedChecks() error {
 				// 更新Redis中的状态（使用相同的Lua脚本保持原子性）
 				contentURL := ""
 				if resp.Status == "succeeded" {
+					log.Println("succeed subtask id:", checkTask.SubTaskID)
 					contentURL = resp.Content.VideoURL
 				}
 

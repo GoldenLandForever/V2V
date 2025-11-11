@@ -9,19 +9,25 @@ import (
 	"V2V/util"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/gin-gonic/gin"
-	"github.com/volcengine/volcengine-go-sdk/service/arkruntime"
 	"github.com/volcengine/volcengine-go-sdk/service/arkruntime/model"
 )
 
-//把这个接口改成一次性输入多个参考图和文本提示词，生成多个视频
-//参考图和文本提示词从前端传入
-
+// SubmitI2VTask 提交图片生成视频任务
+// @Summary 提交图片生成视频任务
+// @Description 接收参考图片和文本提示词，创建一个新的 I2V 任务并返回任务 ID （输入从T2I获得的任务I2V的ID）
+// @Tags I2V
+// @Accept json
+// @Produce json
+// @Param request body task.I2VTask true "I2V 任务请求"
+// @Success 202 {object} map[string]interface{} "{"task_id": 123456, "status": "task submitted"}"
+// @Failure 400 {object} map[string]string "invalid request"
+// @Failure 500 {object} map[string]string "server error"
+// @Router /I2V [post]
 func SubmitI2VTask(c *gin.Context) {
 	// 请确保您已将 API Key 存储在环境变量 ARK_API_KEY 中
 	// 初始化Ark客户端，从环境变量中读取您的API Key
@@ -108,32 +114,52 @@ func SubmitI2VTask(c *gin.Context) {
 		})
 		return
 	}
-	c.JSON(202, gin.H{"task_id": taskID, "status": "submitted"})
+	c.JSON(202, gin.H{"task_id": strconv.FormatUint(taskID, 10), "status": "submitted"})
 }
 
+// GetI2VTaskResult 获取 I2V 任务结果
+// @Summary 获取 I2V 任务结果
+// @Description 通过任务 ID 获取 I2V 任务（输入任务I2V的ID可以查询到任务完成情况）
+// @Tags I2V
+// @Accept json
+// @Produce json
+// @Param task_id path string true "Task ID"
+// @Success 200 {object} map[string]string "{"video_url": "..."}"
+// @Failure 500 {object} map[string]string "server error"
+// @Router /I2V/{task_id} [get]
 func GetI2VTaskResult(c *gin.Context) {
 	//获取任务结果
 	taskID := c.Param("task_id")
-	client := arkruntime.NewClientWithApiKey(os.Getenv("ARK_API_KEY"))
-	ctx := c
-
-	req := model.GetContentGenerationTaskRequest{}
-	req.ID = taskID
-
-	resp, err := client.GetContentGenerationTask(ctx, req)
+	key := "user:0:i2vtaskstatus:" + taskID
+	//从redis中获取任务状态
+	redisclient := store.GetRedis()
+	hash, err := redisclient.HGetAll(key).Result()
 	if err != nil {
-		fmt.Printf("get content generation task error: %v\n", err)
+		c.JSON(500, gin.H{"error": "failed to get task status"})
 		return
 	}
-	// fmt.Printf("%v\n", resp)
-	fmt.Println(resp.Content.VideoURL)
-	c.JSON(200, gin.H{
-		"video_url": resp.Content.VideoURL,
-	})
-	store.I2VTaskVideoURL(taskID, resp.Content.VideoURL)
+	succeeded := hash["succeeded"]
+	failed := hash["failed"]
+	total := hash["total"]
 
+	c.JSON(200, gin.H{
+		"succeeded": succeeded,
+		"failed":    failed,
+		"total":     total,
+	})
 }
 
+// I2VCallback I2V 任务回调处理
+// @Summary I2V 任务回调处理
+// @Description 处理来自视频生成服务的任务完成回调
+// @Tags I2V
+// @Accept json
+// @Produce json
+// @Param task_id path string true "Task ID"
+// @Param data body map[string]interface{} true "Callback Data"
+// @Success 200 {object} map[string]string "{"status": "success"}"
+// @Failure 400 {object} map[string]string "invalid request"
+// @Router /I2VCallback/{task_id} [post]
 func I2VCallback(c *gin.Context) {
 	taskID := c.Param("task_id")
 	var callbackData model.GetContentGenerationTaskResponse
@@ -145,24 +171,6 @@ func I2VCallback(c *gin.Context) {
 	//更新redis中对应任务的状态和视频链接
 	key := "user:0:i2vtaskstatus:" + taskID
 
-	// // 将任务加入延迟队列（5分钟后检查状态）
-	// if delayedQueue, err := queue.GetDelayedI2VQueue(); err == nil {
-	// 	b := struct {
-	// 		TaskID    string `json:"task_id"`
-	// 		SubTaskID string `json:"sub_task_id"`
-	// 	}{
-	// 		TaskID:    taskID,
-	// 		SubTaskID: callbackData.ID,
-	// 	}
-	// 	body, err := json.Marshal(b)
-	// 	if err != nil {
-	// 		fmt.Printf("Failed to marshal delayed check task: %v\n", err)
-	// 	}
-	// 	if err := delayedQueue.PublishDelayedCheck(body); err != nil {
-	// 		fmt.Printf("Failed to add to delayed queue: %v\n", err)
-	// 		// 继续处理，不中断主流程
-	// 	}
-	// }
 	// 使用 Redis Lua 脚本做原子比较/更新：
 	// 返回值为数组：[succeeded, failed, total, changedFlag]
 	// changedFlag: 1 = 新写入或状态变更，0 = 状态未变化

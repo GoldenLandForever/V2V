@@ -12,7 +12,15 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	_ "V2V/docs"
+
+	"strings"
+	"time"
+
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func init() {
@@ -26,6 +34,17 @@ func init() {
 	}
 }
 
+// @title V2V API
+// @version 1.0
+// @description 视频处理相关 API 接口文档
+// @termsOfService http://swagger.io/terms/
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+// @host 198.168.1.34:8080
+// @BasePath /
+// @schemes http https
 func main() {
 	// 初始化单例 RabbitMQ
 	dsn := "amqp://admin:123456@localhost:5672/"
@@ -91,12 +110,35 @@ func main() {
 
 	r := gin.Default()
 
+	// CORS 配置：如果设置了环境变量 CORS_ALLOWED_ORIGINS（逗号分隔），则使用白名单；否则使用宽松的默认策略（方便开发）
+	allowed := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if allowed == "" {
+		r.Use(cors.Default())
+	} else {
+		origins := strings.Split(allowed, ",")
+		r.Use(cors.New(cors.Config{
+			AllowOrigins:     origins,
+			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+			ExposeHeaders:    []string{"Content-Length", "Content-Range"},
+			AllowCredentials: true,
+			MaxAge:           12 * time.Hour,
+		}))
+	}
+
 	// 初始化并启动 SSE hub
 	sseHub := sse.NewHub()
 	sse.SetDefaultHub(sseHub)
 	go sseHub.Run()
 	registerPprof(r)
 	r.GET("/events", sse.ServeSSE)
+
+	// 静态视频目录（返回 /videos/<taskid>.mp4）
+	r.Static("/videos", "./public/videos")
+
+	// Swagger 文档路由
+	//  /home/xc/go/lib/bin/swag init -g main.go -o ./docs
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	r.POST("/V2T", controller.SubmitV2TTask)
 	r.POST("/V2T/LoraText", controller.LoraText)
@@ -106,7 +148,7 @@ func main() {
 	r.GET("/I2V/:task_id", controller.GetI2VTaskResult)
 	r.POST("/I2VCallback/:task_id", controller.I2VCallback)
 	r.GET("/FFmpeg/:task_id", controller.FFmpegHandler)
-	r.Run()
+	r.Run("192.168.1.34:8080")
 
 }
 
