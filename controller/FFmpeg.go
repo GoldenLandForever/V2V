@@ -2,6 +2,7 @@ package controller
 
 import (
 	"V2V/util"
+	"log"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,6 +28,11 @@ func FFmpegHandler(c *gin.Context) {
 	}
 	host := c.Request.Host
 	videoURL := scheme + "://" + host + "/videos/" + taskID + ".mp4"
-
+	//做一下崩溃恢复
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("FFmpegHandler panic recovered: %v", r)
+		}
+	}()
 	c.JSON(200, gin.H{"message": "video ready", "video_url": videoURL, "path": outPath})
 }

@@ -97,12 +97,6 @@ func GetV2TTaskResult(c *gin.Context) {
 	var result task.V2TResponse
 	result.Status = hash["status"]
 	// parse task_id (stored as a string in Redis) into uint64
-
-	if err != nil {
-		log.Printf("Invalid task_id for task %s: %v", taskID, err)
-		c.JSON(500, gin.H{"error": "invalid task id"})
-		return
-	}
 	result.TaskID = taskID
 	result.Result = hash["result"]
 	// result.UpdatedAt = hash["updated_at"]

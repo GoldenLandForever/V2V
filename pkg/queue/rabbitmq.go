@@ -207,6 +207,22 @@ func (q *amqpQueue) Consume() error {
 					// 永久错误：参数不合法等原因，重试无意义，直接送 DLQ
 					log.Printf("Permanent error calling video analysis API, task id: %s: %v", taskIDStr, err)
 					_ = del.Nack(false, false)
+					payload := struct {
+						UserID uint64 `json:"user_id"`
+						TaskID uint64 `json:"task_id"`
+						Status string `json:"status"`
+						Result string `json:"result,omitempty"`
+					}{
+						UserID: vt.UserID,
+						TaskID: vt.TaskID,
+						Status: task.StatusFailed,
+						Result: err.Error(),
+					}
+					if hub := sse.GetHub(); hub != nil {
+						if b, err := json.Marshal(payload); err == nil {
+							hub.PublishTopic(strconv.FormatUint(vt.UserID, 10), b)
+						}
+					}
 					return
 				}
 
@@ -231,6 +247,22 @@ func (q *amqpQueue) Consume() error {
 				maxRetries := 1
 				if attempts >= maxRetries {
 					log.Printf("Exceeded retries, sending to DLQ, task id: %s: %v", taskIDStr, err)
+					payload := struct {
+						UserID uint64 `json:"user_id"`
+						TaskID uint64 `json:"task_id"`
+						Status string `json:"status"`
+						Result string `json:"result,omitempty"`
+					}{
+						UserID: vt.UserID,
+						TaskID: vt.TaskID,
+						Status: task.StatusFailed,
+						Result: err.Error(),
+					}
+					if hub := sse.GetHub(); hub != nil {
+						if b, err := json.Marshal(payload); err == nil {
+							hub.PublishTopic(strconv.FormatUint(vt.UserID, 10), b)
+						}
+					}
 					// 发送到死信队列（通过 nack requeue=false 按队列 x-dead-letter 配置路由）
 					_ = del.Nack(false, false)
 					return
@@ -285,7 +317,7 @@ func (q *amqpQueue) Consume() error {
 			}
 			if hub := sse.GetHub(); hub != nil {
 				if b, err := json.Marshal(payload); err == nil {
-					hub.PublishTopic(strconv.FormatUint(vt.TaskID, 10), b)
+					hub.PublishTopic(strconv.FormatUint(vt.UserID, 10), b)
 				}
 			}
 
@@ -333,6 +365,46 @@ const videoAnalysisText = `#角色你是一位专业且经验丰富的影视分�
 合理调整：优化镜头设计，充分考量制作成本与技术难度，避免复杂镜头影响实际执行。`
 
 func callVideoAnalysisAPI(url string) (string, error) {
+	//计算执行时间
+	starttime := time.Now()
+	defer func() {
+		elapsed := time.Since(starttime)
+		log.Printf("Video analysis API call took %s", elapsed)
+	}()
+	ctx := context.Background()
+	client, err := genai.NewClient(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+
+	parts := []*genai.Part{
+		genai.NewPartFromText(videoAnalysisText),
+		genai.NewPartFromURI(url, "video/mp4"),
+	}
+
+	contents := []*genai.Content{
+		genai.NewContentFromParts(parts, genai.RoleUser),
+	}
+
+	result, err := client.Models.GenerateContent(
+		ctx,
+		"gemini-2.5-flash",
+		contents,
+		nil,
+	)
+	if err != nil {
+		return "", err
+	}
+	if result == nil {
+		return "", errors.New("genai: empty generate response")
+	}
+
+	// 打印生成的结果（可选）
+	// log.Printf("Generated video analysis result: %s", result.Text())
+	return result.Text(), nil
+}
+
+func callVideoAnalysisAPIDoubao(url string) (string, error) {
 	//计算执行时间
 	starttime := time.Now()
 	defer func() {

@@ -4,6 +4,7 @@ import (
 	"V2V/dao/store"
 	"V2V/pkg/sse"
 	"V2V/task"
+	"V2V/util"
 	"context"
 	"encoding/json"
 	"errors"
@@ -261,9 +262,11 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 
 			// 处理成功
 			var url string
-			for _, image := range t2iTaskresp.Data {
+			for i, image := range t2iTaskresp.Data {
 
 				if image.Url != nil {
+					//下载图片存储到public/pic目录下
+					err = util.DownloadImages(*image.Url, strconv.FormatUint(t2iTask.TaskID, 10), i)
 					url = url + *image.Url + "|z|k|x|"
 				}
 			}
@@ -279,6 +282,10 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 					_ = del.Nack(false, true)
 				}
 				return
+			}
+
+			if err != nil {
+				log.Printf("Failed to download images for T2I task, task id: %s: %v", taskIDStr, err)
 			}
 
 			// SSE通知

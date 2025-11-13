@@ -2,20 +2,25 @@ package sse
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-// ServeSSE 处理 SSE（Server-Sent Events）连接，期望的查询参数：?topic=<task_id>
-// 示例：/events?topic=12345
-//
-// 行为说明：
-// - 为浏览器/客户端设置标准的 SSE headers，并以流式方式写入事件。
-// - 每个连接会创建一个缓冲通道（默认缓冲 16），并订阅指定的 topic；当连接关闭时会自动取消订阅。
-// - 如果客户端断线重连，SSE 本身不保证补发丢失的事件；如需可靠投递应在 payload 中加入序列号并在服务端保存历史记录供客户端补取。
+// ServeSSE 处理 SSE（Server-Sent Events）连接
+// @Summary 订阅服务器事件流（SSE）
+// @Description 建立 SSE 长连接以接收服务端推送的事件。需要通过查询参数 `userid` 指定订阅的主题/用户 ID，例如 `/events?userid=12345`。会在V2T，T2I任务结束后推送消息。
+// @Tags SSE
+// @Accept  json
+// @Produce text/event-stream
+// @Param userid query string true "User ID / topic to subscribe"
+// @Success 200 {string} string "event stream"
+// @Failure 400 {string} string "missing topic"
+// @Failure 500 {string} string "server error"
+// @Router /events [get]
 func ServeSSE(c *gin.Context) {
-	topic := c.Query("topic")
+	topic := c.Query("userid")
 	if topic == "" {
 		c.String(http.StatusBadRequest, "missing topic")
 		return
@@ -57,6 +62,8 @@ func ServeSSE(c *gin.Context) {
 		case msg := <-msgCh:
 			// 将消息以 SSE 格式发送（data: <payload>\n\n）
 			fmt.Fprintf(c.Writer, "data: %s\n\n", string(msg))
+			//记录日志
+			log.Printf("Sent message to topic %s: %s", topic, string(msg))
 			flusher.Flush()
 		}
 	}

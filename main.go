@@ -2,10 +2,13 @@ package main
 
 import (
 	"V2V/controller"
+	"V2V/dao/mysql"
 	"V2V/dao/store"
+	"V2V/middlewares"
 	"V2V/pkg/queue"
 	"V2V/pkg/snowflake"
 	sse "V2V/pkg/sse"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/pprof"
@@ -42,10 +45,15 @@ func init() {
 // @contact.url http://www.swagger.io/support
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
-// @host 198.168.1.34:8080
+// @host 198.168.1.50:8080
 // @BasePath /
 // @schemes http https
 func main() {
+
+	if err := mysql.Init(); err != nil {
+		fmt.Printf("init mysql failed, err:%v\n", err)
+		return
+	}
 	// 初始化单例 RabbitMQ
 	dsn := "amqp://admin:123456@localhost:5672/"
 	if err := queue.InitRabbitMQ(dsn); err != nil {
@@ -135,20 +143,32 @@ func main() {
 
 	// 静态视频目录（返回 /videos/<taskid>.mp4）
 	r.Static("/videos", "./public/videos")
+	r.Static("/pic", "./public/pic")
+
+	// 公开路由（无需登录）
+	r.POST("/login", controller.LoginHandler)               // 登陆业务
+	r.POST("/signup", controller.SignUpHandler)             // 注册业务
+	r.GET("/refresh_token", controller.RefreshTokenHandler) // 刷新accessToken
 
 	// Swagger 文档路由
 	//  /home/xc/go/lib/bin/swag init -g main.go -o ./docs
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	r.POST("/V2T", controller.SubmitV2TTask)
-	r.POST("/V2T/LoraText", controller.LoraText)
-	r.POST("/T2I", controller.SubmitT2ITask)
-	r.GET("/V2T/:task_id", controller.GetV2TTaskResult)
-	r.POST("/I2V", controller.SubmitI2VTask)
-	r.GET("/I2V/:task_id", controller.GetI2VTaskResult)
-	r.POST("/I2VCallback/:task_id", controller.I2VCallback)
-	r.GET("/FFmpeg/:task_id", controller.FFmpegHandler)
-	r.Run("192.168.1.34:8080")
+	// 受保护的 API（需要 JWT）
+	v1 := r.Group("/api/v1")
+	v1.Use(middlewares.JWTAuthMiddleware())
+	{
+		v1.POST("/V2T", controller.SubmitV2TTask)
+		v1.POST("/V2T/LoraText", controller.LoraText)
+		v1.POST("/T2I", controller.SubmitT2ITask)
+		v1.GET("/V2T/:task_id", controller.GetV2TTaskResult)
+		v1.POST("/I2V", controller.SubmitI2VTask)
+		v1.GET("/I2V/:task_id", controller.GetI2VTaskResult)
+		v1.POST("/I2VCallback/:task_id", controller.I2VCallback)
+		v1.GET("/FFmpeg/:task_id", controller.FFmpegHandler)
+	}
+
+	r.Run(":8080")
 
 }
 

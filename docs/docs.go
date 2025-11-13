@@ -418,9 +418,264 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/events": {
+            "get": {
+                "description": "建立 SSE 长连接以接收服务端推送的事件。需要通过查询参数 ` + "`" + `userid` + "`" + ` 指定订阅的主题/用户 ID，例如 ` + "`" + `/events?userid=12345` + "`" + `。会在V2T，T2I任务结束后推送消息。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "SSE"
+                ],
+                "summary": "订阅服务器事件流（SSE）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID / topic to subscribe",
+                        "name": "userid",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "event stream",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "missing topic",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "server error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/login": {
+            "post": {
+                "description": "使用用户名和密码登录，返回 access_token 和 refresh_token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "用户登录",
+                "parameters": [
+                    {
+                        "description": "登录表单（username 和 password）",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.LoginForm"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "登录成功，返回用户ID、用户名和两个token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "用户不存在或密码错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "服务器错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/refresh_token": {
+            "post": {
+                "description": "使用 refresh_token 刷新 access_token，需在 Authorization 请求头中提供 Bearer token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "刷新访问令牌",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "刷新令牌（也可在 Authorization header 中提供）",
+                        "name": "refresh_token",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Bearer {access_token}",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "刷新成功，返回新的 access_token 和 refresh_token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Token 格式错误或缺失",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Token 无效或过期",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/signup": {
+            "post": {
+                "description": "创建新用户账号，返回标准响应体",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "用户注册",
+                "parameters": [
+                    {
+                        "description": "注册表单（username 和 password）",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.RegisterForm"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "注册成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误或用户已存在",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "服务器错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "models.LoginForm": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.RegisterForm": {
+            "type": "object",
+            "required": [
+                "confirm_password",
+                "email",
+                "password",
+                "username"
+            ],
+            "properties": {
+                "confirm_password": {
+                    "type": "string"
+                },
+                "email": {
+                    "description": "邮箱",
+                    "type": "string"
+                },
+                "gender": {
+                    "description": "性别 0:未知 1:男 2:女",
+                    "type": "integer",
+                    "enum": [
+                        0,
+                        1,
+                        2
+                    ]
+                },
+                "password": {
+                    "description": "密码",
+                    "type": "string"
+                },
+                "username": {
+                    "description": "用户名",
+                    "type": "string"
+                }
+            }
+        },
         "task.I2VTask": {
             "type": "object",
             "properties": {
@@ -510,7 +765,7 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
-	Host:             "198.168.1.34:8080",
+	Host:             "198.168.1.50:8080",
 	BasePath:         "/",
 	Schemes:          []string{"http", "https"},
 	Title:            "V2V API",
