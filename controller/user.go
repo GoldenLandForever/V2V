@@ -25,7 +25,7 @@ import (
 // @Success 200 {object} map[string]interface{} "注册成功"
 // @Failure 400 {object} map[string]interface{} "请求参数错误或用户已存在"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
-// @Router /signup [post]
+// @Router /api/v1/signup [post]
 func SignUpHandler(c *gin.Context) {
 	// 1.获取请求参数
 	var fo *models.RegisterForm
@@ -70,7 +70,7 @@ func SignUpHandler(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "请求参数错误"
 // @Failure 401 {object} map[string]interface{} "用户不存在或密码错误"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
-// @Router /login [post]
+// @Router /api/v1/login [post]
 func LoginHandler(c *gin.Context) {
 	// 1、获取请求参数及参数校验
 	var u *models.LoginForm
@@ -120,7 +120,7 @@ func LoginHandler(c *gin.Context) {
 // @Success 200 {object} map[string]string "刷新成功，返回新的 access_token 和 refresh_token"
 // @Failure 400 {object} map[string]interface{} "Token 格式错误或缺失"
 // @Failure 401 {object} map[string]interface{} "Token 无效或过期"
-// @Router /refresh_token [post]
+// @Router /api/v1/refresh_token [post]
 func RefreshTokenHandler(c *gin.Context) {
 	rt := c.Query("refresh_token")
 	// 客户端携带Token有三种方式 1.放在请求头 2.放在请求体 3.放在URI

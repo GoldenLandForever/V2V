@@ -10,6 +10,13 @@ definitions:
     - password
     - username
     type: object
+  models.LoraTextRequest:
+    properties:
+      prompt:
+        type: string
+      task_id:
+        type: integer
+    type: object
   models.RegisterForm:
     properties:
       confirm_password:
@@ -36,6 +43,16 @@ definitions:
     - password
     - username
     type: object
+  models.T2IRequest:
+    properties:
+      task_id:
+        type: integer
+    type: object
+  models.V2TRequest:
+    properties:
+      video_url:
+        type: string
+    type: object
   task.I2VTask:
     properties:
       created_at:
@@ -53,43 +70,6 @@ definitions:
       user_id:
         type: integer
     type: object
-  task.LoraTextRequest:
-    properties:
-      created_at:
-        type: integer
-      priority:
-        type: integer
-      result:
-        type: string
-      task_id:
-        type: integer
-      user_id:
-        type: integer
-    type: object
-  task.T2IRequest:
-    properties:
-      created_at:
-        type: integer
-      priority:
-        type: integer
-      task_id:
-        type: integer
-      text:
-        type: string
-      user_id:
-        type: integer
-    type: object
-  task.V2TRequest:
-    properties:
-      created_at:
-        type: integer
-      priority:
-        type: integer
-      user_id:
-        type: integer
-      video_url:
-        type: string
-    type: object
 host: 198.168.1.50:8080
 info:
   contact:
@@ -103,7 +83,36 @@ info:
   title: V2V API
   version: "1.0"
 paths:
-  /FFmpeg/{task_id}:
+  /I2V/{task_id}:
+    get:
+      consumes:
+      - application/json
+      description: 通过任务 ID 获取 I2V 任务（输入任务I2V的ID可以查询到任务完成情况）
+      parameters:
+      - description: Task ID
+        in: path
+        name: task_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"video_url": "..."}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 获取 I2V 任务结果
+      tags:
+      - I2V
+  /api/v1/FFmpeg/{task_id}:
     get:
       consumes:
       - application/json
@@ -126,7 +135,7 @@ paths:
       summary: FFmpeg 处理器
       tags:
       - FFmpeg
-  /I2V:
+  /api/v1/I2V:
     post:
       consumes:
       - application/json
@@ -161,36 +170,7 @@ paths:
       summary: 提交图片生成视频任务
       tags:
       - I2V
-  /I2V/{task_id}:
-    get:
-      consumes:
-      - application/json
-      description: 通过任务 ID 获取 I2V 任务（输入任务I2V的ID可以查询到任务完成情况）
-      parameters:
-      - description: Task ID
-        in: path
-        name: task_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: '{"video_url": "..."}'
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: server error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: 获取 I2V 任务结果
-      tags:
-      - I2V
-  /I2VCallback/{task_id}:
+  /api/v1/I2VCallback/{task_id}:
     post:
       consumes:
       - application/json
@@ -226,7 +206,7 @@ paths:
       summary: I2V 任务回调处理
       tags:
       - I2V
-  /T2I:
+  /api/v1/T2I:
     post:
       consumes:
       - application/json
@@ -237,7 +217,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/task.T2IRequest'
+          $ref: '#/definitions/models.T2IRequest'
       produces:
       - application/json
       responses:
@@ -261,7 +241,7 @@ paths:
       summary: 提交文本生成图片任务
       tags:
       - T2I
-  /V2T:
+  /api/v1/V2T:
     post:
       consumes:
       - application/json
@@ -272,7 +252,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/task.V2TRequest'
+          $ref: '#/definitions/models.V2TRequest'
       produces:
       - application/json
       responses:
@@ -296,7 +276,7 @@ paths:
       summary: 提交视频转文字任务
       tags:
       - V2T
-  /V2T/{task_id}:
+  /api/v1/V2T/{task_id}:
     get:
       consumes:
       - application/json
@@ -330,7 +310,7 @@ paths:
       summary: 获取 V2T 任务结果
       tags:
       - V2T
-  /V2T/LoraText:
+  /api/v1/V2T/LoraText:
     post:
       consumes:
       - application/json
@@ -341,7 +321,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/task.LoraTextRequest'
+          $ref: '#/definitions/models.LoraTextRequest'
       produces:
       - application/json
       responses:
@@ -365,36 +345,7 @@ paths:
       summary: 更新任务 Lora 文本
       tags:
       - V2T
-  /events:
-    get:
-      consumes:
-      - application/json
-      description: 建立 SSE 长连接以接收服务端推送的事件。需要通过查询参数 `userid` 指定订阅的主题/用户 ID，例如 `/events?userid=12345`。会在V2T，T2I任务结束后推送消息。
-      parameters:
-      - description: User ID / topic to subscribe
-        in: query
-        name: userid
-        required: true
-        type: string
-      produces:
-      - text/event-stream
-      responses:
-        "200":
-          description: event stream
-          schema:
-            type: string
-        "400":
-          description: missing topic
-          schema:
-            type: string
-        "500":
-          description: server error
-          schema:
-            type: string
-      summary: 订阅服务器事件流（SSE）
-      tags:
-      - SSE
-  /login:
+  /api/v1/login:
     post:
       consumes:
       - application/json
@@ -432,7 +383,7 @@ paths:
       summary: 用户登录
       tags:
       - Auth
-  /refresh_token:
+  /api/v1/refresh_token:
     post:
       consumes:
       - application/json
@@ -471,7 +422,7 @@ paths:
       summary: 刷新访问令牌
       tags:
       - Auth
-  /signup:
+  /api/v1/signup:
     post:
       consumes:
       - application/json
@@ -504,6 +455,35 @@ paths:
       summary: 用户注册
       tags:
       - Auth
+  /events:
+    get:
+      consumes:
+      - application/json
+      description: 建立 SSE 长连接以接收服务端推送的事件。需要通过查询参数 `userid` 指定订阅的主题/用户 ID，例如 `/events?userid=12345`。会在V2T，T2I任务结束后推送消息。
+      parameters:
+      - description: User ID / topic to subscribe
+        in: query
+        name: userid
+        required: true
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: event stream
+          schema:
+            type: string
+        "400":
+          description: missing topic
+          schema:
+            type: string
+        "500":
+          description: server error
+          schema:
+            type: string
+      summary: 订阅服务器事件流（SSE）
+      tags:
+      - SSE
 schemes:
 - http
 - https

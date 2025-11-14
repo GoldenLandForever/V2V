@@ -2,8 +2,8 @@ package queue
 
 import (
 	"V2V/dao/store"
+	"V2V/models"
 	"V2V/pkg/sse"
-	"V2V/task"
 	"context"
 	"encoding/json"
 	"errors"
@@ -186,7 +186,7 @@ func (q *amqpQueue) Consume() error {
 		go func(del amqp.Delivery) {
 			defer func() { <-sem; wg.Done() }()
 
-			var vt task.V2TTask
+			var vt models.V2TTask
 			if err := json.Unmarshal(del.Body, &vt); err != nil {
 				log.Printf("Invalid task payload: %v", err)
 				// 非法消息，丢弃或送 DLQ（这里选择不重试）
@@ -197,7 +197,7 @@ func (q *amqpQueue) Consume() error {
 
 			// 调用分析 API
 			taskIDStr := strconv.FormatUint(vt.TaskID, 10)
-			text, err := callVideoAnalysisAPI(vt.VideoURL)
+			text, err := callVideoAnalysisAPI(vt.V2TRequest.VideoURL)
 			if err != nil {
 				// 将错误分类为永久错误或临时错误
 				es := err.Error()
@@ -208,14 +208,16 @@ func (q *amqpQueue) Consume() error {
 					log.Printf("Permanent error calling video analysis API, task id: %s: %v", taskIDStr, err)
 					_ = del.Nack(false, false)
 					payload := struct {
+						Code   int    `json:"code"`
 						UserID uint64 `json:"user_id"`
 						TaskID uint64 `json:"task_id"`
 						Status string `json:"status"`
 						Result string `json:"result,omitempty"`
 					}{
+						Code:   400,
 						UserID: vt.UserID,
 						TaskID: vt.TaskID,
-						Status: task.StatusFailed,
+						Status: models.StatusFailed,
 						Result: err.Error(),
 					}
 					if hub := sse.GetHub(); hub != nil {
@@ -248,14 +250,16 @@ func (q *amqpQueue) Consume() error {
 				if attempts >= maxRetries {
 					log.Printf("Exceeded retries, sending to DLQ, task id: %s: %v", taskIDStr, err)
 					payload := struct {
+						Code   int    `json:"code"`
 						UserID uint64 `json:"user_id"`
 						TaskID uint64 `json:"task_id"`
 						Status string `json:"status"`
 						Result string `json:"result,omitempty"`
 					}{
+						Code:   500,
 						UserID: vt.UserID,
 						TaskID: vt.TaskID,
-						Status: task.StatusFailed,
+						Status: models.StatusFailed,
 						Result: err.Error(),
 					}
 					if hub := sse.GetHub(); hub != nil {
@@ -288,7 +292,7 @@ func (q *amqpQueue) Consume() error {
 			}
 
 			vt.Result = text
-			vt.Status = task.StatusCompleted
+			vt.Status = models.StatusCompleted
 			if err := store.V2TTask(vt); err != nil {
 				tid := strconv.FormatUint(vt.TaskID, 10)
 				log.Printf("Failed to update redis, task id: %s: %v", tid, err)
@@ -301,15 +305,16 @@ func (q *amqpQueue) Consume() error {
 				}
 				return
 			}
-
 			// 成功存储到 Redis 之后，通过 SSE 通知前端（按 task_id topic 发布）
 			// 构造通知载荷（可根据前端约定调整字段）
 			payload := struct {
+				Code   int    `json:"code"`
 				UserID uint64 `json:"user_id"`
 				TaskID uint64 `json:"task_id"`
 				Status string `json:"status"`
 				Result string `json:"result,omitempty"`
 			}{
+				Code:   200,
 				UserID: vt.UserID,
 				TaskID: vt.TaskID,
 				Status: vt.Status,

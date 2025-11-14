@@ -27,7 +27,7 @@ import (
 // @Success 202 {object} map[string]interface{} "{"task_id": 123456, "status": "task submitted"}"
 // @Failure 400 {object} map[string]string "invalid request"
 // @Failure 500 {object} map[string]string "server error"
-// @Router /I2V [post]
+// @Router /api/v1/I2V [post]
 func SubmitI2VTask(c *gin.Context) {
 	// 请确保您已将 API Key 存储在环境变量 ARK_API_KEY 中
 	// 初始化Ark客户端，从环境变量中读取您的API Key
@@ -159,7 +159,7 @@ func GetI2VTaskResult(c *gin.Context) {
 // @Param data body map[string]interface{} true "Callback Data"
 // @Success 200 {object} map[string]string "{"status": "success"}"
 // @Failure 400 {object} map[string]string "invalid request"
-// @Router /I2VCallback/{task_id} [post]
+// @Router /api/v1/I2VCallback/{task_id} [post]
 func I2VCallback(c *gin.Context) {
 	taskID := c.Param("task_id")
 	var callbackData model.GetContentGenerationTaskResponse

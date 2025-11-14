@@ -9,7 +9,7 @@ package controller
 type MyCode int64
 
 const (
-	CodeSuccess           MyCode = 1000
+	CodeSuccess           MyCode = 202
 	CodeInvalidParams     MyCode = 1001
 	CodeUserExist         MyCode = 1002
 	CodeUserNotExist      MyCode = 1003

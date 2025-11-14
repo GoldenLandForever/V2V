@@ -12,7 +12,7 @@ var Db *sqlx.DB
 // Init 初始化MySQL连接
 func Init() (err error) {
 	// "user:password@tcp(host:port)/dbname"
-	dsn := fmt.Sprintf("root:123456@tcp(localhost:3306)/V2V?parseTime=true&loc=Local")
+	dsn := fmt.Sprintf("root:123456@tcp(192.168.1.50:3306)/V2V?parseTime=true&loc=Local")
 	Db, err = sqlx.Connect("mysql", dsn)
 	if err != nil {
 		return

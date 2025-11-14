@@ -2,9 +2,9 @@ package controller
 
 import (
 	"V2V/dao/store"
+	"V2V/models"
 	"V2V/pkg/queue"
 	"V2V/pkg/snowflake"
-	"V2V/task"
 	"encoding/json"
 	"strconv"
 	"time"
@@ -18,15 +18,20 @@ import (
 // @Tags T2I
 // @Accept json
 // @Produce json
-// @Param request body task.T2IRequest true "T2I 任务请求"
+// @Param request body models.T2IRequest true "T2I 任务请求"
 // @Success 202 {object} map[string]interface{} "{"task_id": 123456, "status": "task submitted"}"
 // @Failure 400 {object} map[string]string "invalid request"
 // @Failure 500 {object} map[string]string "server error"
-// @Router /T2I [post]
+// @Router /api/v1/T2I [post]
 func SubmitT2ITask(c *gin.Context) {
-	var T2IRequest task.T2IRequest
+	var T2IRequest models.T2IRequest
 	if err := c.ShouldBindJSON(&T2IRequest); err != nil {
 		c.JSON(400, gin.H{"error": "invalid request"})
+		return
+	}
+	_UserID, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(500, gin.H{"error": "failed to get user ID"})
 		return
 	}
 	taskID, err := snowflake.GetID()
@@ -34,19 +39,18 @@ func SubmitT2ITask(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "failed to generate task ID"})
 		return
 	}
-	key := "user:0:task:" + strconv.FormatUint(T2IRequest.TaskID, 10)
+	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":task:" + T2IRequest.TaskID
 	hash, err := store.GetRedis().HGetAll(key).Result()
 	if err != nil {
 		c.JSON(500, gin.H{"error": "failed to generate task ID"})
 		return
 	}
-	var T2ITask task.T2ITask
+	var T2ITask models.T2ITask
 	T2ITask.TaskID = taskID
-	T2ITask.UserID = T2IRequest.UserID
+	T2ITask.UserID = _UserID.(uint64)
 	T2ITask.Prompt = hash["result"]
-	T2ITask.Status = task.T2IStatusPending
+	T2ITask.Status = models.StatusPending
 	T2ITask.CreatedAt = time.Now().Unix()
-	T2IRequest.TaskID = taskID
 
 	rabbitMQ, err := queue.GetT2IRabbitMQ()
 	if err != nil {
@@ -58,11 +62,10 @@ func SubmitT2ITask(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "failed to serialize T2I task"})
 		return
 	}
-	err = rabbitMQ.PublishT2ITask(b, T2IRequest.Priority)
+	err = rabbitMQ.PublishT2ITask(b, T2ITask.Priority)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "failed to publish T2I task"})
 		return
 	}
-	c.JSON(202, gin.H{"task_id": strconv.FormatUint(taskID, 10), "status": "task submitted"})
-
+	ResponseSuccess(c, gin.H{"task_id": strconv.FormatUint(taskID, 10), "status": "task submitted"})
 }

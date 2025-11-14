@@ -1,7 +1,7 @@
 package store
 
 import (
-	"V2V/task"
+	"V2V/models"
 	"log"
 	"strconv"
 
@@ -33,16 +33,14 @@ func Init(cfg string) (err error) {
 func GetRedis() *redis.Client {
 	return Client
 }
-func V2TTask(t task.V2TTask) error {
+func V2TTask(t models.V2TTask) error {
 	//将任务存储到redis中
 	key := "user:" + strconv.FormatUint(t.UserID, 10) + ":task:" + strconv.FormatUint(t.TaskID, 10)
 	// 一次设置多个字段（HSet 支持 map）
 	fields := map[string]interface{}{
-		"video_url":  t.VideoURL,
-		"status":     t.Status,
-		"result":     t.Result,
-		"priority":   t.Priority,
-		"created_at": t.CreatedAt,
+		"video_url": t.V2TRequest.VideoURL,
+		"status":    t.Status,
+		"result":    t.Result,
 	}
 	// 使用 pipeline（或 TxPipeline）把 HSet 和 Expire 放在同一个请求组里
 	pipe := Client.Pipeline()
@@ -62,7 +60,7 @@ func V2TTask(t task.V2TTask) error {
 // 	return json.Unmarshal(b, out)
 // }
 
-func T2ITask(t2iTask task.T2ITask) error {
+func T2ITask(t2iTask models.T2ITask) error {
 	//将任务存储到redis中
 
 	key := "user:" + strconv.FormatUint(t2iTask.UserID, 10) + ":task:" + strconv.FormatUint(t2iTask.TaskID, 10)

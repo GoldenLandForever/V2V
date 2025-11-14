@@ -2,8 +2,8 @@ package queue
 
 import (
 	"V2V/dao/store"
+	"V2V/models"
 	"V2V/pkg/sse"
-	"V2V/task"
 	"V2V/util"
 	"context"
 	"encoding/json"
@@ -178,7 +178,7 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 		go func(del amqp.Delivery) {
 			defer func() { <-sem; wg.Done() }()
 
-			var t2iTask task.T2ITask
+			var t2iTask models.T2ITask
 			if err := json.Unmarshal(del.Body, &t2iTask); err != nil {
 				log.Printf("Invalid T2I task payload: %v", err)
 				_ = del.Nack(false, false) // 进入DLQ
@@ -188,7 +188,7 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 			taskIDStr := strconv.FormatUint(t2iTask.TaskID, 10)
 
 			// 更新任务状态为处理中
-			t2iTask.Status = task.T2IStatusProcessing
+			t2iTask.Status = models.StatusProcessing
 			if err := store.T2ITask(t2iTask); err != nil {
 				log.Printf("Failed to update T2I task status to processing, task id: %s: %v", taskIDStr, err)
 				_ = del.Nack(false, true) // 重试
@@ -209,7 +209,7 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 
 				if isPermanent {
 					log.Printf("Permanent error in T2I API, task id: %s: %v", taskIDStr, err)
-					t2iTask.Status = task.T2IStatusFailed
+					t2iTask.Status = models.StatusFailed
 					store.T2ITask(t2iTask)     // 忽略存储错误
 					_ = del.Nack(false, false) // 进入DLQ
 					return
@@ -235,7 +235,7 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 				maxRetries := 3
 				if attempts >= maxRetries {
 					log.Printf("T2I task exceeded retries, sending to DLQ, task id: %s: %v", taskIDStr, err)
-					t2iTask.Status = task.T2IStatusFailed
+					t2iTask.Status = models.StatusFailed
 					store.T2ITask(t2iTask)
 					_ = del.Nack(false, false)
 					return
@@ -271,7 +271,8 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 				}
 			}
 			t2iTask.Result = url
-			t2iTask.Status = task.T2IStatusCompleted
+			t2iTask.Status = models.StatusCompleted
+			t2iTask.GeneratedImages = t2iTaskresp.Usage.GeneratedImages
 
 			// 存储结果
 			if err := store.T2ITask(t2iTask); err != nil {
@@ -290,20 +291,24 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 
 			// SSE通知
 			payload := struct {
-				UserID uint64 `json:"user_id"`
-				TaskID uint64 `json:"task_id"`
-				Status string `json:"status"`
-				Result string `json:"result,omitempty"`
+				Code            int    `json:"code"`
+				UserID          uint64 `json:"user_id"`
+				TaskID          uint64 `json:"task_id"`
+				Status          string `json:"status"`
+				Result          string `json:"result,omitempty"`
+				GeneratedImages int64  `json:"generated_images"`
 			}{
-				UserID: t2iTask.UserID,
-				TaskID: t2iTask.TaskID,
-				Status: t2iTask.Status,
-				Result: t2iTask.Result,
+				Code:            200,
+				UserID:          t2iTask.UserID,
+				TaskID:          t2iTask.TaskID,
+				Status:          t2iTask.Status,
+				Result:          t2iTask.Result,
+				GeneratedImages: t2iTask.GeneratedImages,
 			}
 
 			if hub := sse.GetHub(); hub != nil {
 				if b, err := json.Marshal(payload); err == nil {
-					hub.PublishTopic(strconv.FormatUint(t2iTask.TaskID, 10), b)
+					hub.PublishTopic(strconv.FormatUint(t2iTask.UserID, 10), b)
 				}
 			}
 
@@ -318,7 +323,7 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 
 // T2I图像生成函数类型（可以替换为实际的AI服务调用）
 
-func T2IHandler(T2IRequest task.T2ITask) (model.ImagesResponse, error) {
+func T2IHandler(T2IRequest models.T2ITask) (model.ImagesResponse, error) {
 	client := arkruntime.NewClientWithApiKey(os.Getenv("ARK_API_KEY"))
 	ctx := context.Background()
 

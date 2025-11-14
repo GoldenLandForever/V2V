@@ -14,11 +14,10 @@ import (
 	"net/http/pprof"
 	_ "net/http/pprof"
 	"os"
-
-	_ "V2V/docs"
-
 	"strings"
 	"time"
+
+	_ "V2V/docs"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -28,10 +27,11 @@ import (
 
 func init() {
 	// 如果环境变量未设置，则设置默认值
-	if os.Getenv("GEMINI_API_KEY") == "" {
-		os.Setenv("GEMINI_API_KEY", "AIzaSyCXCqko6fnnjE_s2RE-oNL_rPCKvMTilbg")
-	}
-
+	// if os.Getenv("GEMINI_API_KEY") == "" {
+	// 	// os.Setenv("GEMINI_API_KEY", "AIzaSyCXCqko6fnnjE_s2RE-oNL_rPCKvMTilbg")
+	// 	os.Setenv("GEMINI_API_KEY", "AIzaSyAkQeviVNOjOVfdya8re4UvhILeTspFqqU")
+	// }
+	os.Setenv("GEMINI_API_KEY", "AIzaSyCXCqko6fnnjE_s2RE-oNL_rPCKvMTilbg")
 	if os.Getenv("ARK_API_KEY") == "" {
 		os.Setenv("ARK_API_KEY", "1b9ef66f-0934-4e09-bcd7-5ebf52808b57")
 	}
@@ -55,7 +55,7 @@ func main() {
 		return
 	}
 	// 初始化单例 RabbitMQ
-	dsn := "amqp://admin:123456@localhost:5672/"
+	dsn := "amqp://admin:123456@192.168.1.50:5672/"
 	if err := queue.InitRabbitMQ(dsn); err != nil {
 		log.Fatalf("Failed to init RabbitMQ: %v", err)
 	}
@@ -105,7 +105,7 @@ func main() {
 		log.Fatalf("Failed to init delayed I2V RabbitMQ: %v", err)
 	}
 
-	err = store.Init("localhost:6379")
+	err = store.Init("192.168.1.50:6379")
 	if err != nil {
 		log.Fatalf("Failed to init Redis: %v", err)
 	}
@@ -118,10 +118,17 @@ func main() {
 
 	r := gin.Default()
 
-	// CORS 配置：如果设置了环境变量 CORS_ALLOWED_ORIGINS（逗号分隔），则使用白名单；否则使用宽松的默认策略（方便开发）
+	//CORS 配置：如果设置了环境变量 CORS_ALLOWED_ORIGINS（逗号分隔），则使用白名单；否则使用宽松的默认策略（方便开发）
 	allowed := os.Getenv("CORS_ALLOWED_ORIGINS")
 	if allowed == "" {
-		r.Use(cors.Default())
+		r.Use(cors.New(cors.Config{
+			AllowOrigins:     []string{"*"}, // 开发环境允许所有来源
+			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+			AllowHeaders:     []string{"*"}, // 允许所有头，包括 Authorization
+			ExposeHeaders:    []string{"Content-Length", "Content-Range", "Authorization"},
+			AllowCredentials: false, // 当 AllowOrigins 为 * 时，此项必须为 false
+			MaxAge:           12 * time.Hour,
+		}))
 	} else {
 		origins := strings.Split(allowed, ",")
 		r.Use(cors.New(cors.Config{
@@ -146,9 +153,6 @@ func main() {
 	r.Static("/pic", "./public/pic")
 
 	// 公开路由（无需登录）
-	r.POST("/login", controller.LoginHandler)               // 登陆业务
-	r.POST("/signup", controller.SignUpHandler)             // 注册业务
-	r.GET("/refresh_token", controller.RefreshTokenHandler) // 刷新accessToken
 
 	// Swagger 文档路由
 	//  /home/xc/go/lib/bin/swag init -g main.go -o ./docs
@@ -156,6 +160,9 @@ func main() {
 
 	// 受保护的 API（需要 JWT）
 	v1 := r.Group("/api/v1")
+	v1.POST("/login", controller.LoginHandler)               // 登陆业务
+	v1.POST("/signup", controller.SignUpHandler)             // 注册业务
+	v1.GET("/refresh_token", controller.RefreshTokenHandler) // 刷新accessToken
 	v1.Use(middlewares.JWTAuthMiddleware())
 	{
 		v1.POST("/V2T", controller.SubmitV2TTask)

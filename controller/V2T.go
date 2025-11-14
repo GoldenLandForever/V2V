@@ -2,9 +2,9 @@ package controller
 
 import (
 	"V2V/dao/store"
+	"V2V/models"
 	"V2V/pkg/queue"
 	"V2V/pkg/snowflake"
-	"V2V/task"
 	"encoding/json"
 	"log"
 	"strconv"
@@ -18,14 +18,14 @@ import (
 // @Tags V2T
 // @Accept json
 // @Produce json
-// @Param request body task.V2TRequest true "V2T 任务请求"
+// @Param request body models.V2TRequest true "V2T 任务请求"
 // @Success 202 {object} map[string]interface{} "{"task_id": "123456", "status": "submitted"}"
 // @Failure 400 {object} map[string]string "invalid request"
 // @Failure 500 {object} map[string]string "server error"
-// @Router /V2T [post]
+// @Router /api/v1/V2T [post]
 func SubmitV2TTask(c *gin.Context) {
 	//解析前端请求并提交任务
-	var taskReq *task.V2TRequest
+	var taskReq *models.V2TRequest
 	if err := c.ShouldBindJSON(&taskReq); err != nil {
 		c.JSON(400, gin.H{"error": "invalid request"})
 		return
@@ -38,12 +38,16 @@ func SubmitV2TTask(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "failed to generate task ID"})
 		return
 	}
-	V2TTask := task.V2TTask{
+	_userId, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(500, gin.H{"error": "failed to get user ID"})
+		return
+	}
+	V2TTask := models.V2TTask{
+		UserID:     _userId.(uint64),
 		TaskID:     taskID,
-		Status:     task.StatusPending,
+		Status:     models.StatusPending,
 		Result:     "",
-		CreatedAt:  taskReq.CreatedAt,
-		UpdatedAt:  taskReq.CreatedAt,
 		V2TRequest: *taskReq,
 	}
 	err = store.V2TTask(V2TTask)
@@ -64,12 +68,12 @@ func SubmitV2TTask(c *gin.Context) {
 	}
 	err = rabbitMQ.Publish([]byte(b), V2TTask.Priority)
 	if err != nil {
-		//回溯redis
 		c.JSON(500, gin.H{"error": "failed to publish task"})
 		return
 	}
 	//把任务ID转成字符串返回给前端
-	c.JSON(202, gin.H{"task_id": strconv.FormatUint(taskID, 10), "status": "submitted"})
+	ResponseSuccess(c, gin.H{"task_id": strconv.FormatUint(taskID, 10), "status": "submitted"})
+
 }
 
 // GetV2TTaskResult 获取 V2T 任务结果
@@ -82,11 +86,17 @@ func SubmitV2TTask(c *gin.Context) {
 // @Success 200 {object} map[string]interface{} "{"task_id": 123456, "status": "completed", "result": "..."}"
 // @Failure 404 {object} map[string]string "task not found"
 // @Failure 500 {object} map[string]string "server error"
-// @Router /V2T/{task_id} [get]
+// @Router /api/v1/V2T/{task_id} [get]
 func GetV2TTaskResult(c *gin.Context) {
 	//获取任务结果
 	taskID := c.Param("task_id")
-	key := "user:0:task:" + taskID
+	//获取userID
+	_UserID, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(500, gin.H{"error": "failed to get user ID"})
+		return
+	}
+	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":task:" + taskID
 	log.Printf("Raw taskID: %q", taskID)
 	hash, err := store.GetRedis().HGetAll(key).Result()
 	if err != nil {
@@ -94,7 +104,7 @@ func GetV2TTaskResult(c *gin.Context) {
 		c.JSON(404, gin.H{"error": "task not found"})
 		return
 	}
-	var result task.V2TResponse
+	var result models.V2TResponse
 	result.Status = hash["status"]
 	// parse task_id (stored as a string in Redis) into uint64
 	result.TaskID = taskID
@@ -102,10 +112,9 @@ func GetV2TTaskResult(c *gin.Context) {
 	// result.UpdatedAt = hash["updated_at"]
 	log.Printf("Fetched task %s: status=%s", taskID, result.Status)
 	c.JSON(200, gin.H{
-		"task_id":    result.TaskID,
-		"status":     result.Status,
-		"result":     result.Result,
-		"updated_at": result.UpdatedAt,
+		"task_id": result.TaskID,
+		"status":  result.Status,
+		"result":  result.Result,
 	})
 }
 
@@ -115,25 +124,30 @@ func GetV2TTaskResult(c *gin.Context) {
 // @Tags V2T
 // @Accept json
 // @Produce json
-// @Param request body task.LoraTextRequest true "Lora 文本更新请求"
+// @Param request body models.LoraTextRequest true "Lora 文本更新请求"
 // @Success 200 {object} map[string]interface{} "{"task_id": 123456, "status": "task updated"}"
 // @Failure 400 {object} map[string]string "invalid request"
 // @Failure 500 {object} map[string]string "server error"
-// @Router /V2T/LoraText [post]
+// @Router /api/v1/V2T/LoraText [post]
 func LoraText(c *gin.Context) {
-	var LoraTextReq task.LoraTextRequest
+	var LoraTextReq models.LoraTextRequest
 	if err := c.ShouldBindJSON(&LoraTextReq); err != nil {
 		c.JSON(400, gin.H{"error": "invalid request"})
 		return
 	}
 	//对应任务更新到redis
-	key := "user:" + strconv.FormatUint(LoraTextReq.UserID, 10) + ":task:" + strconv.FormatUint(LoraTextReq.TaskID, 10)
+	_UserID, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(500, gin.H{"error": "failed to get user ID"})
+		return
+	}
+	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":task:" + strconv.FormatUint(LoraTextReq.TaskID, 10)
 	//对应key查找redis,修改result字段
-	err := store.GetRedis().HSet(key, "result", LoraTextReq.Result).Err()
+	err := store.GetRedis().HSet(key, "result", LoraTextReq.Prompt).Err()
 	if err != nil {
 		log.Printf("Failed to update task %d in redis: %v", LoraTextReq.TaskID, err)
 		c.JSON(500, gin.H{"error": "failed to update task"})
 		return
 	}
-	c.JSON(200, gin.H{"task_id": LoraTextReq.TaskID, "status": "task updated"})
+	c.JSON(200, gin.H{"task_id": strconv.FormatUint(_UserID.(uint64), 10), "status": "task updated"})
 }

@@ -23,7 +23,51 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/FFmpeg/{task_id}": {
+        "/I2V/{task_id}": {
+            "get": {
+                "description": "通过任务 ID 获取 I2V 任务（输入任务I2V的ID可以查询到任务完成情况）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "I2V"
+                ],
+                "summary": "获取 I2V 任务结果",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID",
+                        "name": "task_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{\"video_url\": \"...\"}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/FFmpeg/{task_id}": {
             "get": {
                 "description": "处理 FFmpeg 相关的视频处理任务 （在一切视频都生成后输入任务I2V的ID进行拼接）",
                 "consumes": [
@@ -58,7 +102,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/I2V": {
+        "/api/v1/I2V": {
             "post": {
                 "description": "接收参考图片和文本提示词，创建一个新的 I2V 任务并返回任务 ID （输入从T2I获得的任务I2V的ID）",
                 "consumes": [
@@ -111,51 +155,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/I2V/{task_id}": {
-            "get": {
-                "description": "通过任务 ID 获取 I2V 任务（输入任务I2V的ID可以查询到任务完成情况）",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "I2V"
-                ],
-                "summary": "获取 I2V 任务结果",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Task ID",
-                        "name": "task_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "{\"video_url\": \"...\"}",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/I2VCallback/{task_id}": {
+        "/api/v1/I2VCallback/{task_id}": {
             "post": {
                 "description": "处理来自视频生成服务的任务完成回调",
                 "consumes": [
@@ -209,7 +209,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/T2I": {
+        "/api/v1/T2I": {
             "post": {
                 "description": "接收任务ID，创建一个新的 T2I 任务并返回任务 ID（输入从V2T得到的任务ID）",
                 "consumes": [
@@ -229,7 +229,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/task.T2IRequest"
+                            "$ref": "#/definitions/models.T2IRequest"
                         }
                     }
                 ],
@@ -262,7 +262,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/V2T": {
+        "/api/v1/V2T": {
             "post": {
                 "description": "接收视频URL，创建一个新的 V2T 任务并返回任务 ID （目前没有登陆注册，所以就只要求输入视频链接）",
                 "consumes": [
@@ -282,7 +282,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/task.V2TRequest"
+                            "$ref": "#/definitions/models.V2TRequest"
                         }
                     }
                 ],
@@ -315,7 +315,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/V2T/LoraText": {
+        "/api/v1/V2T/LoraText": {
             "post": {
                 "description": "为指定任务更新 Lora 相关的文本提示词 （同时输入任务ID与更新后的提示词即可）",
                 "consumes": [
@@ -335,7 +335,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/task.LoraTextRequest"
+                            "$ref": "#/definitions/models.LoraTextRequest"
                         }
                     }
                 ],
@@ -368,7 +368,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/V2T/{task_id}": {
+        "/api/v1/V2T/{task_id}": {
             "get": {
                 "description": "通过任务 ID 获取 V2T 任务的当前状态和结果 （输入任务ID即可）",
                 "consumes": [
@@ -419,51 +419,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/events": {
-            "get": {
-                "description": "建立 SSE 长连接以接收服务端推送的事件。需要通过查询参数 ` + "`" + `userid` + "`" + ` 指定订阅的主题/用户 ID，例如 ` + "`" + `/events?userid=12345` + "`" + `。会在V2T，T2I任务结束后推送消息。",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "text/event-stream"
-                ],
-                "tags": [
-                    "SSE"
-                ],
-                "summary": "订阅服务器事件流（SSE）",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User ID / topic to subscribe",
-                        "name": "userid",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "event stream",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "missing topic",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "server error",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/login": {
+        "/api/v1/login": {
             "post": {
                 "description": "使用用户名和密码登录，返回 access_token 和 refresh_token",
                 "consumes": [
@@ -519,7 +475,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/refresh_token": {
+        "/api/v1/refresh_token": {
             "post": {
                 "description": "使用 refresh_token 刷新 access_token，需在 Authorization 请求头中提供 Bearer token",
                 "consumes": [
@@ -575,7 +531,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/signup": {
+        "/api/v1/signup": {
             "post": {
                 "description": "创建新用户账号，返回标准响应体",
                 "consumes": [
@@ -623,6 +579,50 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/events": {
+            "get": {
+                "description": "建立 SSE 长连接以接收服务端推送的事件。需要通过查询参数 ` + "`" + `userid` + "`" + ` 指定订阅的主题/用户 ID，例如 ` + "`" + `/events?userid=12345` + "`" + `。会在V2T，T2I任务结束后推送消息。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "SSE"
+                ],
+                "summary": "订阅服务器事件流（SSE）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID / topic to subscribe",
+                        "name": "userid",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "event stream",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "missing topic",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "server error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -638,6 +638,17 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "models.LoraTextRequest": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "integer"
                 }
             }
         },
@@ -676,6 +687,22 @@ const docTemplate = `{
                 }
             }
         },
+        "models.T2IRequest": {
+            "type": "object",
+            "properties": {
+                "task_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.V2TRequest": {
+            "type": "object",
+            "properties": {
+                "video_url": {
+                    "type": "string"
+                }
+            }
+        },
         "task.I2VTask": {
             "type": "object",
             "properties": {
@@ -699,63 +726,6 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "integer"
-                }
-            }
-        },
-        "task.LoraTextRequest": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "integer"
-                },
-                "priority": {
-                    "type": "integer"
-                },
-                "result": {
-                    "type": "string"
-                },
-                "task_id": {
-                    "type": "integer"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "task.T2IRequest": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "integer"
-                },
-                "priority": {
-                    "type": "integer"
-                },
-                "task_id": {
-                    "type": "integer"
-                },
-                "text": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "task.V2TRequest": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "integer"
-                },
-                "priority": {
-                    "type": "integer"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "video_url": {
-                    "type": "string"
                 }
             }
         }
