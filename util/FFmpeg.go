@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -229,12 +230,12 @@ func DownloadAndConcatVideos(urls []string, outputPath string) error {
 	return nil
 }
 
-func FFmpeg(taskid string) string {
+func FFmpeg(userId uint64, taskid string) string {
 	// 使用示例
 	redisclient := store.GetRedis()
 	// 测试效果
 	// 将存储在redis中的Zset中的视频链接对应的任务ID取出来
-	keys := "user:0:i2vtask:" + taskid
+	keys := "user:" + strconv.FormatUint(userId, 10) + ":i2vtask:" + taskid
 	val, err := redisclient.ZRange(keys, 0, -1).Result()
 	if err != nil {
 		log.Fatalf("无法从Redis获取任务链接: %v", err)

@@ -1,7 +1,7 @@
 package models
 
 type I2VRequest struct {
-	TaskID uint64 `json:"task_id"`
+	TaskID string `json:"task_id"`
 }
 
 type I2VTask struct {

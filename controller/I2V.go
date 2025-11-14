@@ -2,11 +2,10 @@ package controller
 
 import (
 	"V2V/dao/store"
+	"V2V/models"
 	"V2V/pkg/queue"
 	"V2V/pkg/snowflake"
 	"V2V/pkg/sse"
-	"V2V/task"
-	"V2V/util"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -23,7 +22,7 @@ import (
 // @Tags I2V
 // @Accept json
 // @Produce json
-// @Param request body task.I2VTask true "I2V 任务请求"
+// @Param request body models.I2VRequest true "I2V 任务请求"
 // @Success 202 {object} map[string]interface{} "{"task_id": 123456, "status": "task submitted"}"
 // @Failure 400 {object} map[string]string "invalid request"
 // @Failure 500 {object} map[string]string "server error"
@@ -32,13 +31,18 @@ func SubmitI2VTask(c *gin.Context) {
 	// 请确保您已将 API Key 存储在环境变量 ARK_API_KEY 中
 	// 初始化Ark客户端，从环境变量中读取您的API Key
 	//测试一下功能
-	var t task.I2VTask
+	var t models.I2VRequest
 	// 从请求体中解析任务参数
 	if err := c.ShouldBindJSON(&t); err != nil {
 		c.JSON(400, gin.H{"error": "invalid request"})
 		return
 	}
-	key := "user:0:task:" + strconv.FormatInt(int64(t.TaskID), 10)
+	_UserID, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(500, gin.H{"error": "failed to get user ID"})
+		return
+	}
+	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":task:" + t.TaskID
 	// 从redis里找key获得参考图和文本提示词
 	hash, err := store.GetRedis().HGetAll(key).Result()
 	if err != nil {
@@ -63,7 +67,7 @@ func SubmitI2VTask(c *gin.Context) {
 	// redis 存储状态，总任务数，成功数，失败数
 	redisclient := store.GetRedis()
 
-	statusKey := "user:0:i2vtaskstatus:" + strconv.FormatInt(int64(taskID), 10)
+	statusKey := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":i2vtaskstatus:" + strconv.FormatInt(int64(taskID), 10)
 	redisclient.HSet(statusKey, "total", len(referenceImages))
 	redisclient.HSet(statusKey, "succeeded", 0)
 	redisclient.HSet(statusKey, "failed", 0)
@@ -79,7 +83,7 @@ func SubmitI2VTask(c *gin.Context) {
 		fmt.Printf("Processing reference image %d: %s\n", i+1, refImg)
 		go func(idx int, img string) {
 			defer wg.Done()
-			var I2Vtask task.I2VTask
+			var I2Vtask models.I2VTask
 			I2Vtask.UserID = 0
 			I2Vtask.TaskID = uint64(taskID)
 			I2Vtask.Index = idx + 1
@@ -114,7 +118,7 @@ func SubmitI2VTask(c *gin.Context) {
 		})
 		return
 	}
-	c.JSON(202, gin.H{"task_id": strconv.FormatUint(taskID, 10), "status": "submitted"})
+	c.JSON(202, gin.H{"code": 202, "task_id": strconv.FormatUint(taskID, 10), "status": "submitted"})
 }
 
 // GetI2VTaskResult 获取 I2V 任务结果
@@ -130,7 +134,13 @@ func SubmitI2VTask(c *gin.Context) {
 func GetI2VTaskResult(c *gin.Context) {
 	//获取任务结果
 	taskID := c.Param("task_id")
-	key := "user:0:i2vtaskstatus:" + taskID
+	_UserID, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(500, gin.H{"error": "failed to get user ID"})
+		return
+	}
+
+	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":i2vtaskstatus:" + taskID
 	//从redis中获取任务状态
 	redisclient := store.GetRedis()
 	hash, err := redisclient.HGetAll(key).Result()
@@ -169,7 +179,12 @@ func I2VCallback(c *gin.Context) {
 	}
 	redisclient := store.GetRedis()
 	//更新redis中对应任务的状态和视频链接
-	key := "user:0:i2vtaskstatus:" + taskID
+	_UserID, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(500, gin.H{"error": "failed to get user ID"})
+		return
+	}
+	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":i2vtaskstatus:" + taskID
 
 	// 使用 Redis Lua 脚本做原子比较/更新：
 	// 返回值为数组：[succeeded, failed, total, changedFlag]
@@ -266,7 +281,7 @@ return {redis.call('HGET', key, 'succeeded'), redis.call('HGET', key, 'failed'),
 			Status string `json:"status"`
 			Result string `json:"result,omitempty"`
 		}{
-			UserID: 0,
+			UserID: _UserID.(uint64),
 			TaskID: uintTaskID,
 			Status: "falied",
 			Result: "暂时不搞",
@@ -285,14 +300,14 @@ return {redis.call('HGET', key, 'succeeded'), redis.call('HGET', key, 'failed'),
 		fmt.Printf("All I2V subtasks succeeded for main task %s, starting video concatenation\n", taskID)
 		go func(tid string) {
 			// util.FFmpeg 目前在实现中使用硬编码的 key。建议 future 改为接受 taskID。
-			util.FFmpeg(tid)
+			// util.FFmpeg(tid)
 			payload := struct {
 				UserID uint64 `json:"user_id"`
 				TaskID uint64 `json:"task_id"`
 				Status string `json:"status"`
 				Result string `json:"result,omitempty"`
 			}{
-				UserID: 0,
+				UserID: _UserID.(uint64),
 				TaskID: uintTaskID,
 				Status: "succeeded",
 				Result: "暂时不搞",
@@ -300,7 +315,7 @@ return {redis.call('HGET', key, 'succeeded'), redis.call('HGET', key, 'failed'),
 
 			if hub := sse.GetHub(); hub != nil {
 				if b, err := json.Marshal(payload); err == nil {
-					hub.PublishTopic("0", b)
+					hub.PublishTopic(strconv.FormatUint(_UserID.(uint64), 10), b)
 				}
 			}
 			//通知用户

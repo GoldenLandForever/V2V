@@ -2,11 +2,14 @@ package queue
 
 import (
 	"V2V/dao/store"
+	"V2V/pkg/sse"
+	"V2V/util"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/streadway/amqp"
@@ -130,10 +133,10 @@ func (q *delayedI2VAMQPQueue) ConsumeDelayedChecks() error {
 	go func() {
 		for d := range msgs {
 			var checkTask struct {
+				UserID    uint64 `json:"user_id"`
 				TaskID    string `json:"task_id"`
 				SubTaskID string `json:"sub_task_id"`
 			}
-
 			if err := json.Unmarshal(d.Body, &checkTask); err != nil {
 				fmt.Printf("Failed to unmarshal delayed check task: %v\n", err)
 				d.Nack(false, false)
@@ -142,8 +145,8 @@ func (q *delayedI2VAMQPQueue) ConsumeDelayedChecks() error {
 
 			// 检查Redis中的状态
 			redisClient := store.GetRedis()
-			key := "user:0:i2vtask:" + checkTask.SubTaskID + ":video_url"
-			key2 := "user:0:i2vtaskstatus:" + checkTask.TaskID
+			key := "user:" + strconv.FormatUint(checkTask.UserID, 10) + ":i2vtask:" + checkTask.SubTaskID + ":video_url"
+			key2 := "user:" + strconv.FormatUint(checkTask.UserID, 10) + ":i2vtaskstatus:" + checkTask.TaskID
 			status, err := redisClient.HGet(key, "status").Result()
 			if err != nil {
 				fmt.Printf("Failed to get task status from Redis: %v\n", err)
@@ -202,7 +205,74 @@ func (q *delayedI2VAMQPQueue) ConsumeDelayedChecks() error {
 					d.Nack(false, true)
 					continue
 				}
+				// 获取任务统计信息
+				succeededStr, err := redisClient.HGet(key2, "succeeded").Result()
+				failedStr, err := redisClient.HGet(key2, "failed").Result()
+				totalStr, err := redisClient.HGet(key2, "total").Result()
+
+				if err != nil {
+					fmt.Printf("Failed to get task statistics from Redis: %v\n", err)
+					d.Ack(false)
+					continue
+				}
+
+				// 解析计数值
+				succeeded := int64(0)
+				failed := int64(0)
+				total := int64(0)
+
+				if succeededStr != "" {
+					succeeded, _ = strconv.ParseInt(succeededStr, 10, 64)
+				}
+				if failedStr != "" {
+					failed, _ = strconv.ParseInt(failedStr, 10, 64)
+				}
+				if totalStr != "" {
+					total, _ = strconv.ParseInt(totalStr, 10, 64)
+				}
+
+				// 构建 SSE 消息
+				var sseMsg map[string]interface{}
+
+				// 检查是否有失败的任务
+				if failed > 0 {
+					sseMsg = map[string]interface{}{
+						"code":      500,
+						"status":    "failed",
+						"task_id":   checkTask.TaskID,
+						"succeeded": succeeded,
+						"failed":    failed,
+						"total":     total,
+					}
+				} else if succeeded+failed == total && total > 0 {
+					// 所有任务完成且没有失败
+					util.FFmpeg(checkTask.UserID, checkTask.TaskID)
+					sseMsg = map[string]interface{}{
+						"code":      200,
+						"status":    "success",
+						"task_id":   checkTask.TaskID,
+						"succeeded": succeeded,
+						"failed":    failed,
+						"total":     total,
+					}
+				}
+
+				// 发送 SSE 消息给前端
+				if sseMsg != nil {
+					msgBytes, err := json.Marshal(sseMsg)
+					if err != nil {
+						fmt.Printf("Failed to marshal SSE message: %v\n", err)
+					} else {
+						topic := strconv.FormatUint(checkTask.UserID, 10)
+						hub := sse.GetHub()
+						if hub != nil {
+							hub.PublishTopic(topic, msgBytes)
+							fmt.Printf("Published SSE message for user %s: %s\n", topic, string(msgBytes))
+						}
+					}
+				}
 			}
+			//获得拿到Redis的状态后发送SSE事件给前端
 
 			d.Ack(false)
 		}

@@ -120,7 +120,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/task.I2VTask"
+                            "$ref": "#/definitions/models.I2VRequest"
                         }
                     }
                 ],
@@ -624,6 +624,14 @@
         }
     },
     "definitions": {
+        "models.I2VRequest": {
+            "type": "object",
+            "properties": {
+                "task_id": {
+                    "type": "string"
+                }
+            }
+        },
         "models.LoginForm": {
             "type": "object",
             "required": [
@@ -689,7 +697,7 @@
             "type": "object",
             "properties": {
                 "task_id": {
-                    "type": "integer"
+                    "type": "string"
                 }
             }
         },
@@ -698,32 +706,6 @@
             "properties": {
                 "video_url": {
                     "type": "string"
-                }
-            }
-        },
-        "task.I2VTask": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "integer"
-                },
-                "image_url": {
-                    "type": "string"
-                },
-                "index": {
-                    "type": "integer"
-                },
-                "priority": {
-                    "type": "integer"
-                },
-                "prompt": {
-                    "type": "string"
-                },
-                "task_id": {
-                    "type": "integer"
-                },
-                "user_id": {
-                    "type": "integer"
                 }
             }
         }

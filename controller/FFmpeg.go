@@ -19,7 +19,11 @@ import (
 func FFmpegHandler(c *gin.Context) {
 	// 调用 FFmpeg 相关功能的代码，返回输出文件路径（位于 ./public/videos）
 	taskID := c.Param("task_id")
-	outPath := util.FFmpeg(taskID)
+	_UserID, ok := c.Get("user_id")
+	if !ok {
+		log.Fatalf("无法从上下文获取用户ID")
+	}
+	outPath := util.FFmpeg(_UserID.(uint64), taskID)
 
 	// 构造前端可访问的 URL（包含 scheme）
 	scheme := "http"

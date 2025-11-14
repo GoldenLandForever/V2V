@@ -2,7 +2,7 @@ package queue
 
 import (
 	"V2V/dao/store"
-	"V2V/task"
+	"V2V/models"
 	"context"
 	"encoding/json"
 	"errors"
@@ -144,7 +144,7 @@ func (q *i2vAMQPQueue) ConsumeI2V() error {
 	go func() {
 		for d := range msgs {
 			// 处理I2V任务消息
-			var i2vTask task.I2VTask
+			var i2vTask models.I2VTask
 			err := json.Unmarshal(d.Body, &i2vTask)
 			if err != nil {
 				fmt.Printf("Failed to unmarshal I2V task: %v\n", err)
@@ -153,7 +153,7 @@ func (q *i2vAMQPQueue) ConsumeI2V() error {
 			}
 
 			// 创建I2V任务
-			err = createI2VTask(i2vTask.ImageURL, i2vTask.Prompt, i2vTask.Index, int(i2vTask.TaskID))
+			err = createI2VTask(i2vTask.ImageURL, i2vTask.Prompt, i2vTask.Index, int(i2vTask.TaskID), i2vTask.UserID)
 			if err != nil {
 				fmt.Printf("Failed to create I2V task: %v\n", err)
 				d.Nack(false, true) // 重试
@@ -174,7 +174,7 @@ func (q *i2vAMQPQueue) Close() error {
 	return q.conn.Close()
 }
 
-func createI2VTask(refImg, prompts string, index, taskID int) error {
+func createI2VTask(refImg, prompts string, index, taskID int, userId uint64) error {
 	// err := createI2VTask(img, prompts, idx+1, int(taskID))
 	client := arkruntime.NewClientWithApiKey(
 		os.Getenv("ARK_API_KEY"),
@@ -218,9 +218,11 @@ func createI2VTask(refImg, prompts string, index, taskID int) error {
 		return err
 	}
 	checkTask := struct {
+		UserID    uint64 `json:"user_id"`
 		TaskID    string `json:"task_id"`
 		SubTaskID string `json:"sub_task_id"`
 	}{
+		UserID:    userId,
 		TaskID:    strconv.Itoa(taskID),
 		SubTaskID: createResponse.ID,
 	}

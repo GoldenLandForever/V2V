@@ -1,5 +1,10 @@
 basePath: /
 definitions:
+  models.I2VRequest:
+    properties:
+      task_id:
+        type: string
+    type: object
   models.LoginForm:
     properties:
       password:
@@ -46,29 +51,12 @@ definitions:
   models.T2IRequest:
     properties:
       task_id:
-        type: integer
+        type: string
     type: object
   models.V2TRequest:
     properties:
       video_url:
         type: string
-    type: object
-  task.I2VTask:
-    properties:
-      created_at:
-        type: integer
-      image_url:
-        type: string
-      index:
-        type: integer
-      priority:
-        type: integer
-      prompt:
-        type: string
-      task_id:
-        type: integer
-      user_id:
-        type: integer
     type: object
 host: 198.168.1.50:8080
 info:
@@ -146,7 +134,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/task.I2VTask'
+          $ref: '#/definitions/models.I2VRequest'
       produces:
       - application/json
       responses:
