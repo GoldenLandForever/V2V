@@ -242,7 +242,7 @@ func FFmpeg(userId uint64, taskid string) string {
 	}
 	urls := make([]string, 0)
 	for _, v := range val {
-		url, err := GetVideoURL(v)
+		url, err := GetVideoURL(v, userId)
 		if err != nil {
 			log.Fatalf("获取视频链接失败: %v", err)
 		}
@@ -293,7 +293,7 @@ func mergeVideoAudio(videoPath, audioPath, outputPath string) error {
 	return nil
 }
 
-func GetVideoURL(taskID string) (string, error) {
+func GetVideoURL(taskID string, userId uint64) (string, error) {
 	client := arkruntime.NewClientWithApiKey(os.Getenv("ARK_API_KEY"))
 	ctx := context.Background()
 
@@ -305,6 +305,6 @@ func GetVideoURL(taskID string) (string, error) {
 		fmt.Printf("get content generation task error: %v\n", err)
 		return "", err
 	}
-	store.I2VTaskVideoURL(taskID, resp.Content.VideoURL)
+	store.I2VTaskVideoURL(taskID, resp.Content.VideoURL, userId)
 	return resp.Content.VideoURL, nil
 }

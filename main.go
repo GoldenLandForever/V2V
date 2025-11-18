@@ -32,6 +32,7 @@ func init() {
 	// 	os.Setenv("GEMINI_API_KEY", "AIzaSyAkQeviVNOjOVfdya8re4UvhILeTspFqqU")
 	// }
 	os.Setenv("GEMINI_API_KEY", "AIzaSyCXCqko6fnnjE_s2RE-oNL_rPCKvMTilbg")
+	// os.Setenv("GEMINI_API_KEY", "AIzaSyA-q0t6G-gBTBYcI4fE5lIlaCZXjvzQziM")
 	if os.Getenv("ARK_API_KEY") == "" {
 		os.Setenv("ARK_API_KEY", "1b9ef66f-0934-4e09-bcd7-5ebf52808b57")
 	}

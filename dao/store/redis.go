@@ -88,9 +88,9 @@ func T2ITask(t2iTask models.T2ITask) error {
 // bug :
 // 这个地方应该在I2V初始化一下
 // 而不是在FFmepeg初始化
-func I2VTaskVideoURL(taskID string, videoURL string) error {
+func I2VTaskVideoURL(taskID string, videoURL string, userId uint64) error {
 	//将任务存储到redis中
-	key := "user:0:i2vtask:" + taskID + ":video_url"
+	key := "user:" + strconv.FormatUint(userId, 10) + ":i2vtask:" + taskID + ":video_url"
 	//应该用hash存储
 	fields := map[string]interface{}{
 		"video_url": videoURL,
@@ -108,9 +108,9 @@ func I2VTaskVideoURL(taskID string, videoURL string) error {
 	return nil
 }
 
-func I2VTaskID(taskID, index int, callbacktaskID string) error {
+func I2VTaskID(taskID, index int, callbacktaskID string, userId uint64) error {
 	//将任务存储到redis中
-	key := "user:0:i2vtask:" + strconv.Itoa(taskID)
+	key := "user:" + strconv.FormatUint(userId, 10) + ":i2vtask:" + strconv.Itoa(taskID)
 	// 使用 ZAdd 存储分镜任务ID，成员为 callbacktaskID，分数为 index
 	err := Client.ZAdd(key, redis.Z{
 		Score:  float64(index),
@@ -122,7 +122,7 @@ func I2VTaskID(taskID, index int, callbacktaskID string) error {
 		log.Printf("Failed to store i2v task id for task %d part %d: %v", taskID, index, err)
 		return err
 	}
-	err = I2VTaskVideoURL(callbacktaskID, "")
+	err = I2VTaskVideoURL(callbacktaskID, "", userId)
 	if err != nil {
 		log.Printf("Failed to initialize i2v video url for task %d: %v", taskID, err)
 		return err

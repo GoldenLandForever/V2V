@@ -41,6 +41,10 @@ func InsertUser(user models.User) (error error) {
 	// 执行SQL语句入库
 	sqlstr := `insert into user(user_id,username,password,email,gender) values(?,?,?,?,?)`
 	_, err := Db.Exec(sqlstr, user.UserID, user.UserName, user.Password, user.Email, user.Gender)
+	if err != nil {
+		return err
+	}
+	err = InitUserToken(user.UserID, 10000)
 	return err
 }
 

@@ -211,7 +211,7 @@ func (q *delayedI2VAMQPQueue) ConsumeDelayedChecks() error {
 				totalStr, err := redisClient.HGet(key2, "total").Result()
 
 				if err != nil {
-					fmt.Printf("Failed to get task statistics from Redis: %v\n", err)
+					fmt.Printf("Failed to get task statistics key2: %s from Redis: %v\n", key2, err)
 					d.Ack(false)
 					continue
 				}

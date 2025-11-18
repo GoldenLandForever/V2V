@@ -12,7 +12,7 @@ const (
 	CodeSuccess           MyCode = 202
 	CodeInvalidParams     MyCode = 1001
 	CodeUserExist         MyCode = 1002
-	CodeUserNotExist      MyCode = 1003
+	CodeUserNotExist      MyCode = 400
 	CodeInvalidPassword   MyCode = 1004
 	CodeServerBusy        MyCode = 1005
 	CodeInvalidToken      MyCode = 1006

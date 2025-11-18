@@ -209,7 +209,7 @@ func createI2VTask(refImg, prompts string, index, taskID int, userId uint64) err
 	fmt.Printf("Task Created with ID: %s \n", createResponse.ID)
 	//打印createResponse
 	fmt.Printf("Create Response: %+v\n", createResponse)
-	err = store.I2VTaskID(taskID, index, createResponse.ID)
+	err = store.I2VTaskID(taskID, index, createResponse.ID, userId)
 
 	// 将任务放入延迟队列，等待处理结果
 	delayedI2VAMQPQueueInstance, err := GetDelayedI2VQueue()

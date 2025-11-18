@@ -221,3 +221,74 @@ V2V/
 ---
 
 **项目已成功集成 Swagger UI！现在可以通过 Web 界面查看和测试所有 API 接口了。** ✨
+
+## 💰 Token 系统（用户余额管理）
+
+V2V 项目包含了 Token 系统，用于管理用户在各项任务（T2I、I2V、V2T 等）中的消耗配额。
+
+### 数据库迁移
+
+在数据库中执行以下 SQL 语句来创建 Token 相关的表：
+
+```sql
+-- 用户Token表 - 用于管理用户的token余额和VIP等级
+CREATE TABLE IF NOT EXISTS `t_user_tokens` (
+  `user_id` bigint unsigned NOT NULL COMMENT '用户ID',
+  `tokens` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'Token余额',
+  `vip_level` tinyint unsigned NOT NULL DEFAULT 0 COMMENT 'VIP等级: 0-普通用户, 1-VIP1, 2-VIP2, 3-VIP3',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`user_id`),
+  KEY `idx_vip_level` (`vip_level`),
+  KEY `idx_updated_at` (`updated_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户Token余额表';
+```
+
+### Token API 接口
+
+#### 1. 扣除 Token（T2I 任务）
+
+**POST** `/api/v1/token/deduct-t2i`
+
+**幂等性保证**：通过检查 `t2i_tasks` 表中的任务状态实现。仅当任务状态为 `pending` 时才会扣除 Token。
+
+**请求体：**
+```json
+{
+  "task_id": 123456789,
+  "user_id": 987654321,
+  "token_count": 10
+}
+```
+
+**成功响应 (200)：**
+```json
+{
+  "success": true,
+  "message": "token deducted successfully",
+  "remaining_tokens": 90
+}
+```
+
+#### 2. 添加 Token
+
+**POST** `/api/v1/token/add/:user_id/:amount`
+
+为用户添加 Token（充值、奖励等）。
+
+**示例：**
+```
+POST /api/v1/token/add/987654321/100
+```
+
+#### 3. 查询 Token 信息
+
+**GET** `/api/v1/token/info/:user_id`
+
+获取用户的 Token 余额和 VIP 等级。
+
+#### 4. 初始化用户 Token
+
+**POST** `/api/v1/token/init/:user_id`
+
+为新注册用户初始化 Token（初始值：100）。

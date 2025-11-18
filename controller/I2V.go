@@ -84,7 +84,7 @@ func SubmitI2VTask(c *gin.Context) {
 		go func(idx int, img string) {
 			defer wg.Done()
 			var I2Vtask models.I2VTask
-			I2Vtask.UserID = 0
+			I2Vtask.UserID = _UserID.(uint64)
 			I2Vtask.TaskID = uint64(taskID)
 			I2Vtask.Index = idx + 1
 			I2Vtask.ImageURL = img
