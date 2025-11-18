@@ -314,6 +314,7 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 
 			_ = del.Ack(false)
 			log.Printf("T2I task completed successfully, task id: %s", taskIDStr)
+
 		}(d)
 	}
 

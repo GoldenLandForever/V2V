@@ -2,11 +2,13 @@ package controller
 
 import (
 	"V2V/dao/mysql"
+	"V2V/dao/store"
 	"V2V/logic"
 	"V2V/models"
 	"V2V/pkg/jwt"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -144,5 +146,40 @@ func RefreshTokenHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  aToken,
 		"refresh_token": rToken,
+	})
+}
+
+func GetUserInfo(c *gin.Context) {
+	//获取用户过往记录
+	userIDVal, ok := c.Get("user_id")
+	if !ok {
+		ResponseError(c, 400)
+		return
+	}
+	userID := userIDVal.(uint64)
+
+	// 从查询参数获取分页信息
+	cursor := c.Query("cursor")
+	pageSizeStr := c.Query("page_size")
+
+	pageSize := 10 // 默认 10
+	if pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 100 {
+			pageSize = ps
+		}
+	}
+
+	// 获取用户任务历史（游标分页）
+	history, err := store.GetUserTaskHistory(userID, cursor, pageSize)
+	if err != nil {
+		zap.L().Error("failed to get user task history", zap.Error(err))
+		ResponseError(c, 500)
+		return
+	}
+
+	// 返回用户信息和任务历史
+	ResponseSuccess(c, gin.H{
+		"user_id": fmt.Sprintf("%d", userID),
+		"history": history,
 	})
 }

@@ -35,7 +35,7 @@ func GetRedis() *redis.Client {
 }
 func V2TTask(t models.V2TTask) error {
 	//将任务存储到redis中
-	key := "user:" + strconv.FormatUint(t.UserID, 10) + ":task:" + strconv.FormatUint(t.TaskID, 10)
+	key := "user:" + strconv.FormatUint(t.UserID, 10) + ":v2ttask:" + strconv.FormatUint(t.TaskID, 10)
 	// 一次设置多个字段（HSet 支持 map）
 	fields := map[string]interface{}{
 		"video_url": t.V2TRequest.VideoURL,
@@ -63,7 +63,7 @@ func V2TTask(t models.V2TTask) error {
 func T2ITask(t2iTask models.T2ITask) error {
 	//将任务存储到redis中
 
-	key := "user:" + strconv.FormatUint(t2iTask.UserID, 10) + ":task:" + strconv.FormatUint(t2iTask.TaskID, 10)
+	key := "user:" + strconv.FormatUint(t2iTask.UserID, 10) + ":t2itask:" + strconv.FormatUint(t2iTask.TaskID, 10)
 	// 一次设置多个字段（HSet 支持 map）
 	fields := map[string]interface{}{
 		"prompt":     t2iTask.Prompt,
@@ -82,6 +82,7 @@ func T2ITask(t2iTask models.T2ITask) error {
 		log.Printf("Failed to store t2i task %s: %v", t2iTask.TaskID, err)
 		return err
 	}
+
 	return nil
 }
 

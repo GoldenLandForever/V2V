@@ -42,7 +42,7 @@ func SubmitI2VTask(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "failed to get user ID"})
 		return
 	}
-	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":task:" + t.TaskID
+	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":t2itask:" + t.TaskID
 	// 从redis里找key获得参考图和文本提示词
 	hash, err := store.GetRedis().HGetAll(key).Result()
 	if err != nil {

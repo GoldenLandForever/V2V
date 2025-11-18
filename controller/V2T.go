@@ -96,7 +96,7 @@ func GetV2TTaskResult(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "failed to get user ID"})
 		return
 	}
-	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":task:" + taskID
+	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":v2ttask:" + taskID
 	log.Printf("Raw taskID: %q", taskID)
 	hash, err := store.GetRedis().HGetAll(key).Result()
 	if err != nil {
@@ -141,7 +141,7 @@ func LoraText(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "failed to get user ID"})
 		return
 	}
-	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":task:" + strconv.FormatUint(LoraTextReq.TaskID, 10)
+	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":v2ttask:" + strconv.FormatUint(LoraTextReq.TaskID, 10)
 	//对应key查找redis,修改result字段
 	err := store.GetRedis().HSet(key, "result", LoraTextReq.Prompt).Err()
 	if err != nil {

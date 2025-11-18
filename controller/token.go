@@ -2,24 +2,9 @@ package controller
 
 import (
 	"V2V/dao/mysql"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
-
-// DeductTokenRequest T2I token 扣除请求
-type DeductTokenRequest struct {
-	TaskID     uint64 `json:"task_id" binding:"required"`
-	UserID     uint64 `json:"user_id" binding:"required"`
-	TokenCount uint64 `json:"token_count" binding:"required"`
-}
-
-// DeductTokenResponse token 扣除响应
-type DeductTokenResponse struct {
-	Success         bool   `json:"success"`
-	Message         string `json:"message"`
-	RemainingTokens uint64 `json:"remaining_tokens,omitempty"`
-}
 
 // GetUserTokenInfo 获取用户 Token 信息
 // @Summary 获取用户Token信息
@@ -34,14 +19,16 @@ type DeductTokenResponse struct {
 // @Failure 500 {object} map[string]string "server error"
 // @Router /api/v1/token/info/:user_id [get]
 func GetUserTokenInfo(c *gin.Context) {
-	userIDStr := c.Param("user_id")
-	userID, err := strconv.ParseUint(userIDStr, 10, 64)
-	if err != nil {
+	_UserID, ok := c.Get("user_id")
+	if !ok {
 		ResponseError(c, 400)
 		return
 	}
 
-	userToken, err := mysql.GetUserToken(userID)
-
+	userToken, err := mysql.GetUserToken(_UserID.(uint64))
+	if err != nil {
+		ResponseError(c, 500)
+		return
+	}
 	ResponseSuccess(c, userToken)
 }

@@ -39,7 +39,7 @@ func SubmitT2ITask(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "failed to generate task ID"})
 		return
 	}
-	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":task:" + T2IRequest.TaskID
+	key := "user:" + strconv.FormatUint(_UserID.(uint64), 10) + ":t2itask:" + T2IRequest.TaskID
 	hash, err := store.GetRedis().HGetAll(key).Result()
 	if err != nil {
 		c.JSON(500, gin.H{"error": "failed to generate task ID"})

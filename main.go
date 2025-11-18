@@ -174,6 +174,12 @@ func main() {
 		v1.GET("/I2V/:task_id", controller.GetI2VTaskResult)
 		v1.POST("/I2VCallback/:task_id", controller.I2VCallback)
 		v1.GET("/FFmpeg/:task_id", controller.FFmpegHandler)
+
+		// 用户信息和任务历史
+		v1.GET("/user/info", controller.GetUserInfo)
+
+		// Token 相关接口
+		v1.GET("/token/info/:user_id", controller.GetUserTokenInfo)
 	}
 
 	r.Run(":8080")
