@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"V2V/dao/mysql"
 	"V2V/dao/store"
 	"V2V/pkg/sse"
 	"V2V/util"
@@ -177,6 +178,9 @@ func (q *delayedI2VAMQPQueue) ConsumeDelayedChecks() error {
 				if resp.Status == "succeeded" {
 					log.Println("succeed subtask id:", checkTask.SubTaskID)
 					contentURL = resp.Content.VideoURL
+					//暂时不扣费
+					// temptaskid, _ := strconv.ParseUint(checkTask.TaskID, 10, 64)
+					// mysql.DeductTokensForTask(checkTask.UserID, temptaskid, int64(resp.Usage.CompletionTokens))
 				}
 
 				// 使用与I2VCallback相同的Lua脚本更新状态
@@ -214,6 +218,13 @@ func (q *delayedI2VAMQPQueue) ConsumeDelayedChecks() error {
 					fmt.Printf("Failed to get task statistics key2: %s from Redis: %v\n", key2, err)
 					d.Ack(false)
 					continue
+				}
+
+				if resp.Status == "succeeded" {
+					mysql.UpdateI2VTask(checkTask.SubTaskID, contentURL, resp.Usage.CompletionTokens)
+					//暂时不扣费
+					// temptaskid, _ := strconv.ParseUint(checkTask.TaskID, 10, 64)
+					// mysql.DeductTokensForTask(checkTask.UserID, temptaskid, int64(resp.Usage.CompletionTokens))
 				}
 
 				// 解析计数值

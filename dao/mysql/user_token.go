@@ -24,7 +24,7 @@ func GetUserToken(userID uint64) (*models.UserToken, error) {
 }
 
 // InitUserToken 为新用户初始化Token记录（初始100 token）
-func InitUserToken(userID uint64, initialTokens uint64) error {
+func InitUserToken(userID uint64, initialTokens int64) error {
 	sqlStr := `INSERT INTO t_user_tokens (user_id, tokens, vip_level, created_at, updated_at) 
 	           VALUES (?, ?, 0, NOW(), NOW()) 
 	           ON DUPLICATE KEY UPDATE tokens = tokens + ?`
@@ -33,7 +33,7 @@ func InitUserToken(userID uint64, initialTokens uint64) error {
 }
 
 // AddTokens 给用户添加Token（充值、奖励等）
-func AddTokens(userID uint64, amount uint64) error {
+func AddTokens(userID uint64, amount int64) error {
 	if amount == 0 {
 		return errors.New("amount must be greater than 0")
 	}
@@ -55,7 +55,7 @@ func AddTokens(userID uint64, amount uint64) error {
 // DeductTokensForTask 在一个事务内对 t2i_tasks 和 t_user_tokens 同时加行锁，
 // 当且仅当 t2i_tasks.status = 'succeed' 时，将任务状态更新为 'tokenpay' 并扣除用户 token。
 // 该操作为原子操作，保证幂等性（重复或并发请求只有第一次会成功扣费并修改任务状态）。
-func DeductTokensForTask(userID uint64, taskID uint64, amount uint64) (bool, uint64, error) {
+func DeductTokensForTask(userID uint64, taskID uint64, amount int64) (bool, int64, error) {
 	if amount == 0 {
 		return false, 0, errors.New("amount must be greater than 0")
 	}
@@ -74,7 +74,7 @@ func DeductTokensForTask(userID uint64, taskID uint64, amount uint64) (bool, uin
 	if currentStatus != "succeed" {
 		if currentStatus == "tokenpay" {
 			// 已经是付费状态，幂等性返回成功
-			var balance uint64
+			var balance int64
 			err := Db.Get(&balance, "SELECT tokens FROM t_user_tokens WHERE user_id = ?", userID)
 			if err != nil {
 				return false, 0, err
@@ -131,7 +131,7 @@ func DeductTokensForTask(userID uint64, taskID uint64, amount uint64) (bool, uin
 	}
 
 	// 7. 查询最新余额
-	var newBalance uint64
+	var newBalance int64
 	err = Db.Get(&newBalance, "SELECT tokens FROM t_user_tokens WHERE user_id = ?", userID)
 	if err != nil {
 		return true, 0, fmt.Errorf("deduct success but failed to get balance: %v", err)

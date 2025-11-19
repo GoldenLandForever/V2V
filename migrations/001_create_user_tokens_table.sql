@@ -60,15 +60,20 @@ CREATE TABLE `t2i_tasks` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 
 CREATE TABLE `i2v_task_main` (
-  `task_id` bigint unsigned NOT NULL COMMENT ' IDID',
-  `user_id` bigint unsigned NOT NULL COMMENT ' ID',
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `task_id` bigint unsigned NOT NULL COMMENT ' taskID',
+  `user_id` bigint unsigned NOT NULL COMMENT ' useridID',
   `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `video_id` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ID',
+  `video_url` varchar(1024) COLLATE utf8mb4_unicode_ci COMMENT 'URL',
+  `index` int unsigned NOT NULL COMMENT ' index',
   `token` int unsigned DEFAULT NULL COMMENT 'token',
   `prompt` text COLLATE utf8mb4_unicode_ci,
   `error_message` text COLLATE utf8mb4_unicode_ci,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`task_id`),
+  PRIMARY KEY (`id`),
+  KEY `idx_i2v_task` (`task_id`),
   KEY `idx_i2v_user` (`user_id`),
   KEY `idx_i2v_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci

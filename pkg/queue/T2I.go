@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"V2V/dao/mysql"
 	"V2V/dao/store"
 	"V2V/models"
 	"V2V/pkg/sse"
@@ -273,7 +274,7 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 			t2iTask.Result = url
 			t2iTask.Status = models.StatusCompleted
 			t2iTask.GeneratedImages = t2iTaskresp.Usage.GeneratedImages
-
+			t2iTask.Token = t2iTaskresp.Usage.TotalTokens
 			// 存储结果
 			if err := store.T2ITask(t2iTask); err != nil {
 				log.Printf("Failed to update T2I task result, task id: %s: %v", taskIDStr, err)
@@ -284,10 +285,20 @@ func (q *t2iAMQPQueue) ConsumeT2I() error {
 				}
 				return
 			}
-
-			if err != nil {
-				log.Printf("Failed to download images for T2I task, task id: %s: %v", taskIDStr, err)
+			if err := mysql.InsertT2ITask(&t2iTask); err != nil {
+				log.Printf("Failed to persist T2I task to MySQL, task id: %s: %v", taskIDStr, err)
+				if del.Redelivered {
+					_ = del.Nack(false, false)
+				} else {
+					_ = del.Nack(false, true)
+				}
+				return
 			}
+			//暂时不扣费
+			// _, _, err = mysql.DeductTokensForTask(t2iTask.UserID, t2iTask.TaskID, t2iTask.Token)
+			// if err != nil {
+			// 	log.Printf("Failed to deduct tokens for T2I task, task id: %s: %v", taskIDStr, err)
+			// }
 
 			// SSE通知
 			payload := struct {
@@ -368,6 +379,7 @@ func T2IHandler(T2IRequest models.T2ITask) (model.ImagesResponse, error) {
 		}
 		fmt.Printf("Image %d: Size: %s, URL: %s\n", i+1, image.Size, url)
 	}
+
 	return t2iTaskresp, nil
 }
 

@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"V2V/dao/mysql"
 	"V2V/dao/store"
 	"V2V/models"
 	"context"
@@ -160,6 +161,12 @@ func (q *i2vAMQPQueue) ConsumeI2V() error {
 				continue
 			}
 
+			if err != nil {
+				fmt.Printf("Failed to insert I2V task to DB: %v\n", err)
+				d.Nack(false, true) // 重试
+				continue
+			}
+
 			d.Ack(false)
 			fmt.Printf("I2V task processed successfully: UserID=%d, TaskID=%d, Index=%d\n", i2vTask.UserID, i2vTask.TaskID, i2vTask.Index)
 		}
@@ -210,7 +217,11 @@ func createI2VTask(refImg, prompts string, index, taskID int, userId uint64) err
 	//打印createResponse
 	fmt.Printf("Create Response: %+v\n", createResponse)
 	err = store.I2VTaskID(taskID, index, createResponse.ID, userId)
-
+	err = mysql.InsertI2VTask(taskID, index, createResponse.ID, userId, prompts)
+	if err != nil {
+		fmt.Printf("Failed to insert I2V task to DB: %v\n", err)
+		return err
+	}
 	// 将任务放入延迟队列，等待处理结果
 	delayedI2VAMQPQueueInstance, err := GetDelayedI2VQueue()
 	if err != nil {

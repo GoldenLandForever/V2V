@@ -22,10 +22,6 @@ type DeductTokenResponse struct {
 	RemainingTokens uint64 `json:"remaining_tokens,omitempty"`
 }
 
-func DeductT2IToken(c *gin.Context) {
-
-}
-
 // getT2ITaskStatus 获取 T2I 任务的状态
 // 用于确保幂等性：只有在任务状态为 pending 时才能扣除 Token
 func getT2ITaskStatus(taskID uint64) (string, error) {
@@ -40,27 +36,6 @@ func getT2ITaskStatus(taskID uint64) (string, error) {
 		return "", err
 	}
 	return status, nil
-}
-
-func AddTokensHandler(c *gin.Context) {
-	userIDStr := c.Param("user_id")
-	amountStr := c.Param("amount")
-
-	userID, err := strconv.ParseUint(userIDStr, 10, 64)
-	if err != nil {
-		return
-	}
-
-	amount, err := strconv.ParseUint(amountStr, 10, 64)
-	if err != nil {
-		return
-	}
-
-	err = mysql.AddTokens(userID, amount)
-	if err != nil {
-		return
-	}
-
 }
 
 // InitUserTokensHandler 初始化用户Token（新用户注册时调用）

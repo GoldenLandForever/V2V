@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"V2V/dao/mysql"
 	"V2V/dao/store"
 	"V2V/models"
 	"V2V/pkg/queue"
@@ -32,6 +33,15 @@ func SubmitT2ITask(c *gin.Context) {
 	_UserID, ok := c.Get("user_id")
 	if !ok {
 		c.JSON(500, gin.H{"error": "failed to get user ID"})
+		return
+	}
+	userToken, err := mysql.GetUserToken(_UserID.(uint64))
+	if err != nil {
+		c.JSON(500, gin.H{"error": "failed to get user token"})
+		return
+	}
+	if userToken.Tokens < 0 {
+		c.JSON(403, gin.H{"error": "user tokens insufficient"})
 		return
 	}
 	taskID, err := snowflake.GetID()

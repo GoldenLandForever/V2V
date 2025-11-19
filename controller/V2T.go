@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"V2V/dao/mysql"
 	"V2V/dao/store"
 	"V2V/models"
 	"V2V/pkg/queue"
@@ -32,17 +33,26 @@ func SubmitV2TTask(c *gin.Context) {
 	}
 	//创建新任务
 	//获得任务ID
-
-	taskID, err := snowflake.GetID()
-	if err != nil {
-		c.JSON(500, gin.H{"error": "failed to generate task ID"})
-		return
-	}
 	_userId, ok := c.Get("user_id")
 	if !ok {
 		c.JSON(500, gin.H{"error": "failed to get user ID"})
 		return
 	}
+	userToken, err := mysql.GetUserToken(_userId.(uint64))
+	if err != nil {
+		c.JSON(500, gin.H{"error": "failed to get user token"})
+		return
+	}
+	if userToken.Tokens < 0 {
+		c.JSON(403, gin.H{"error": "user tokens insufficient"})
+		return
+	}
+	taskID, err := snowflake.GetID()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "failed to generate task ID"})
+		return
+	}
+
 	V2TTask := models.V2TTask{
 		UserID:     _userId.(uint64),
 		TaskID:     taskID,

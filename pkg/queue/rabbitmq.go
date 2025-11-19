@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"V2V/dao/mysql"
 	"V2V/dao/store"
 	"V2V/models"
 	"V2V/pkg/sse"
@@ -293,9 +294,22 @@ func (q *amqpQueue) Consume() error {
 
 			vt.Result = text
 			vt.Status = models.StatusCompleted
+
 			if err := store.V2TTask(vt); err != nil {
 				tid := strconv.FormatUint(vt.TaskID, 10)
 				log.Printf("Failed to update redis, task id: %s: %v", tid, err)
+				// 存储失败视为临时问题，重入队（或根据需要改为不重试）
+				if del.Redelivered {
+					// 已经重试过，丢弃
+					_ = del.Nack(false, false)
+				} else {
+					_ = del.Nack(false, true)
+				}
+				return
+			}
+			if err := mysql.InsertV2TTask(&vt); err != nil {
+				tid := strconv.FormatUint(vt.TaskID, 10)
+				log.Printf("Failed to insert V2T task into MySQL, task id: %s: %v", tid, err)
 				// 存储失败视为临时问题，重入队（或根据需要改为不重试）
 				if del.Redelivered {
 					// 已经重试过，丢弃
